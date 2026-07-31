@@ -61,6 +61,13 @@ Code dùng SQL chuẩn nên nâng lên PostgreSQL sau này khá dễ (đổi dri
 
 ---
 
+> 🔌 **Muốn nối thiết bị thật để đo ngoài đồng?**
+> Xem [**HUONG-DAN-CHAY-THAT.md**](HUONG-DAN-CHAY-THAT.md) — hướng dẫn từng bước
+> từ đấu dây, nạp firmware, hiệu chuẩn bồn nước đến xử lý lỗi RS485.
+> Phần dưới đây chỉ để chạy thử phần mềm khi chưa có phần cứng.
+
+---
+
 ## 2. Chạy thử (không cần phần cứng)
 
 Mở **2 terminal**.
