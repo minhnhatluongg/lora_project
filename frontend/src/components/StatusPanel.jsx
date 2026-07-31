@@ -1,4 +1,5 @@
-import { STATUS_COLOR, SENSOR_STATUS_TEXT, timeAgo, fmtDateTime } from '../metrics.js';
+import { STATUS_COLOR, SENSOR_STATUS_TEXT } from '../metrics.js';
+import { TimeAgo } from './TimeAgo.jsx';
 
 function Row({ label, children }) {
   return (
@@ -57,9 +58,7 @@ export function StatusPanel({ status, latest, connected }) {
       </Row>
 
       <Row label="Dữ liệu gần nhất">
-        <span className="status-value" title={fmtDateTime(latest?.created_at)}>
-          {latest?.created_at ? timeAgo(latest.created_at) : '--'}
-        </span>
+        <TimeAgo iso={latest?.created_at} className="status-value" />
       </Row>
 
       <Row label="Kênh realtime">

@@ -353,13 +353,35 @@ Lệnh hữu ích: `pm2 list`, `pm2 logs farm-backend`, `pm2 restart farm-backen
 
 ---
 
+## Hệ thống tự xử lý những gì
+
+Vài tình huống hay gặp ngoài đồng đã được xử lý sẵn, biết trước để khỏi hoảng:
+
+| Tình huống | Hệ thống làm gì |
+|---|---|
+| ESP32 mất điện đúng lúc vừa nhận lệnh | Lệnh không được xác nhận sẽ **tự phát lại** sau 30 giây. Thử 3 lần không xong thì đánh dấu `failed` và **giải phóng thiết bị** để AUTO tiếp tục điều khiển được |
+| ESP32 offline cả tiếng, trong lúc đó bạn bấm nút nhiều lần | Lệnh cũ quá 5 phút bị hủy; mỗi thiết bị chỉ giữ **1 lệnh mới nhất**, nên khi ESP32 sống lại nó không phát lại cả chuỗi thao tác cũ |
+| ESP32 chết hẳn | Sau 30 giây không có dữ liệu, thẻ **Master** trên dashboard tự chuyển đỏ và có cảnh báo — không cần bấm F5 |
+| Mất WiFi ở máy tính rồi có lại | Dashboard tự tải lại toàn bộ dữ liệu khi kết nối lại, không hiển thị số liệu cũ |
+| Đầu dò RS485 chưa đọc được lần nào | STM32 **chỉ gửi 4 khoảng cách siêu âm**, bỏ trống 7 chỉ số đất. Dashboard hiện `--` thay vì pH = 0, và không bắn cảnh báo giả |
+| Một chỉ số nằm ngoài ngưỡng liên tục | Chỉ cảnh báo **1 lần**, im trong 10 phút rồi mới nhắc lại |
+
+Các mốc thời gian trên chỉnh được trong `backend/.env`
+(`COMMAND_RETRY_SECONDS`, `COMMAND_TTL_SECONDS`, `MASTER_TIMEOUT_SECONDS`,
+`ALERT_REPEAT_SECONDS`).
+
+---
+
 ## Vận hành
 
 **Dung lượng dữ liệu.** STM32 gửi khoảng **1 bản ghi mỗi 2.5 giây** → ~35.000
-dòng/ngày, ~1 triệu dòng/tháng (khoảng 100 MB). SQLite chịu được, nhưng nếu bạn
-định chạy nhiều tháng thì nên giãn nhịp đo: trong `testcode/src/main.cpp`, tìm
-dòng cuối `while (millis() - waitStart < 2000)` và tăng `2000` lên `30000`
-(30 giây/lần) — nút PB7 vẫn cho phép đo ngay bất cứ lúc nào.
+dòng/ngày, ~1 triệu dòng/tháng (khoảng 100 MB).
+
+Backend **tự xóa** telemetry cũ hơn 90 ngày và cảnh báo cũ hơn 30 ngày (chỉnh
+`TELEMETRY_RETENTION_DAYS` / `ALERT_RETENTION_DAYS` trong `.env`, đặt `0` để giữ
+mãi mãi). Muốn giảm lượng ghi ngay từ gốc thì giãn nhịp đo: trong
+`testcode/src/main.cpp`, tìm dòng cuối `while (millis() - waitStart < 2000)` và
+tăng `2000` lên `30000` (30 giây/lần) — nút PB7 vẫn cho phép đo ngay bất cứ lúc nào.
 
 **Sao lưu.** Toàn bộ dữ liệu nằm trong `backend/data/`. Tắt backend rồi copy cả
 thư mục là xong (nhớ copy cả file `.db-wal` và `.db-shm`).

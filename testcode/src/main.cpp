@@ -38,6 +38,11 @@ float Dist2 = 0.0;
 float Dist3 = 0.0;
 float Dist4 = 0.0;
 
+// Cờ báo đã từng đọc thành công đầu dò đất ít nhất 1 lần.
+// Trước lần đó, 7 biến ở trên vẫn đang là 0 -> KHÔNG được gửi lên server,
+// nếu không dashboard sẽ ghi nhận pH=0, độ ẩm=0... và bắn cảnh báo giả.
+bool soilDataValid = false;
+
 // Biến quản lý trạng thái Nút nhấn
 uint8_t lcdPage = 0;          // 0: T/H/EC/pH | 1: N/P/K | 2: Siêu âm D1..D4
 bool forceReadNext = false;   // Cờ báo yêu cầu đo ngay lập tức
@@ -103,17 +108,27 @@ uint16_t Modbus_CRC16(const uint8_t *buf, uint8_t len) {
 // đúng lý do khi dữ liệu ngừng cập nhật.
 // Khoảng cách bằng -1 (siêu âm không phản hồi) được backend lưu thành null.
 void sendUplink(const char *status) {
-    ESP_Serial.print(F("{\"temperature\":")); ESP_Serial.print(Temperature, 1);
-    ESP_Serial.print(F(",\"humidity\":"));    ESP_Serial.print(Humidity, 1);
-    ESP_Serial.print(F(",\"ph\":"));          ESP_Serial.print(pH_Value, 1);
-    ESP_Serial.print(F(",\"ec\":"));          ESP_Serial.print(EC_Value);      // µS/cm
-    ESP_Serial.print(F(",\"n\":"));           ESP_Serial.print(Nitrogen);      // mg/kg
-    ESP_Serial.print(F(",\"p\":"));           ESP_Serial.print(Phosphorus);
-    ESP_Serial.print(F(",\"k\":"));           ESP_Serial.print(Potassium);
-    ESP_Serial.print(F(",\"dist1\":"));       ESP_Serial.print(Dist1, 1);      // cm
-    ESP_Serial.print(F(",\"dist2\":"));       ESP_Serial.print(Dist2, 1);
-    ESP_Serial.print(F(",\"dist3\":"));       ESP_Serial.print(Dist3, 1);
-    ESP_Serial.print(F(",\"dist4\":"));       ESP_Serial.print(Dist4, 1);
+    ESP_Serial.print(F("{"));
+
+    // 4 cảm biến siêu âm luôn được đo mới ở MỌI vòng lặp, kể cả khi RS485 lỗi,
+    // nên chúng luôn được gửi. -1 = không có phản hồi, server lưu thành null.
+    ESP_Serial.print(F("\"dist1\":"));  ESP_Serial.print(Dist1, 1);      // cm
+    ESP_Serial.print(F(",\"dist2\":")); ESP_Serial.print(Dist2, 1);
+    ESP_Serial.print(F(",\"dist3\":")); ESP_Serial.print(Dist3, 1);
+    ESP_Serial.print(F(",\"dist4\":")); ESP_Serial.print(Dist4, 1);
+
+    // 7 chỉ số đất chỉ gửi khi đã đọc được ít nhất một lần. Khi RS485 đang lỗi,
+    // đây là giá trị đọc được lần cuối - server vẫn nhận biết nhờ sensor_status.
+    if (soilDataValid) {
+        ESP_Serial.print(F(",\"temperature\":")); ESP_Serial.print(Temperature, 1);
+        ESP_Serial.print(F(",\"humidity\":"));    ESP_Serial.print(Humidity, 1);
+        ESP_Serial.print(F(",\"ph\":"));          ESP_Serial.print(pH_Value, 1);
+        ESP_Serial.print(F(",\"ec\":"));          ESP_Serial.print(EC_Value);   // µS/cm
+        ESP_Serial.print(F(",\"n\":"));           ESP_Serial.print(Nitrogen);   // mg/kg
+        ESP_Serial.print(F(",\"p\":"));           ESP_Serial.print(Phosphorus);
+        ESP_Serial.print(F(",\"k\":"));           ESP_Serial.print(Potassium);
+    }
+
     ESP_Serial.print(F(",\"sensor_status\":\"")); ESP_Serial.print(status);
     ESP_Serial.println(F("\"}"));
 }
@@ -315,6 +330,7 @@ void loop() {
                 Humidity = rawHum / 10.0;
                 Temperature = rawTemp / 10.0;
                 pH_Value = rawPH / 10.0;
+                soilDataValid = true; // từ đây trở đi mới được gửi 7 chỉ số đất
 
                 // --- IN RA SERIAL MONITOR ---
                 Serial.print("Do am dat: "); Serial.print(Humidity, 1); Serial.println(" %");

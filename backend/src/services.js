@@ -69,6 +69,109 @@ export function touchMaster({ loraRssi, slaveOnline, sensorStatus } = {}) {
   );
 }
 
+// ---- Command queue ---------------------------------------------------------
+// Statuses that still represent "the master owes us this action".
+const LIVE_COMMAND_STATUSES = `('pending', 'sent')`;
+
+// Queue a command, replacing anything still outstanding for the same device.
+// Pressing ON then OFF must leave ONE instruction, not two that replay in order.
+export function enqueueCommand(deviceId, action) {
+  db.prepare(
+    `UPDATE commands SET status = 'superseded'
+     WHERE device_id = ? AND status IN ${LIVE_COMMAND_STATUSES}`
+  ).run(deviceId);
+
+  const info = db
+    .prepare(`INSERT INTO commands (device_id, action) VALUES (?, ?)`)
+    .run(deviceId, action);
+  return db.prepare(`SELECT * FROM commands WHERE id = ?`).get(info.lastInsertRowid);
+}
+
+export function hasLiveCommand(deviceId) {
+  return !!db
+    .prepare(
+      `SELECT 1 FROM commands WHERE device_id = ?
+       AND status IN ${LIVE_COMMAND_STATUSES} LIMIT 1`
+    )
+    .get(deviceId);
+}
+
+// Keeps the queue honest. Runs before every poll AND on a timer, so a device
+// recovers even while the master is away.
+export function sweepCommands() {
+  const { commandRetrySeconds, commandMaxAttempts, commandTtlSeconds } = config;
+
+  // 1. Handed out but never acked -> offer it again (master rebooted mid-command).
+  const retried = db
+    .prepare(
+      `UPDATE commands SET status = 'pending', sent_at = NULL, attempts = attempts + 1
+       WHERE status = 'sent' AND attempts < ?
+         AND sent_at <= datetime('now', ?)`
+    )
+    .run(commandMaxAttempts, `-${commandRetrySeconds} seconds`);
+
+  // 2. Retried too many times -> stop looping, let automation move on.
+  const failed = db
+    .prepare(
+      `UPDATE commands SET status = 'failed'
+       WHERE status = 'sent' AND attempts >= ?
+         AND sent_at <= datetime('now', ?)`
+    )
+    .run(commandMaxAttempts, `-${commandRetrySeconds} seconds`);
+
+  // 3. Queued while the master was offline for ages -> don't replay stale intent
+  //    at whatever the field looks like now.
+  const expired = db
+    .prepare(
+      `UPDATE commands SET status = 'expired'
+       WHERE status = 'pending' AND created_at <= datetime('now', ?)`
+    )
+    .run(`-${commandTtlSeconds} seconds`);
+
+  const changed = retried.changes + failed.changes + expired.changes;
+  if (changed > 0) {
+    if (failed.changes)
+      createAlert('warning', `${failed.changes} lệnh không được xác nhận sau ${commandMaxAttempts} lần thử`);
+    if (expired.changes)
+      createAlert('info', `${expired.changes} lệnh quá hạn đã bị hủy (master offline quá lâu)`);
+  }
+  return changed;
+}
+
+// Housekeeping. At ~1 reading every 2.5s a node writes ~35k telemetry rows a
+// day, so without this the file grows without bound.
+export function pruneOldData() {
+  const closed = db
+    .prepare(
+      `DELETE FROM commands
+       WHERE status NOT IN ${LIVE_COMMAND_STATUSES}
+         AND created_at <= datetime('now', ?)`
+    )
+    .run(`-${config.commandHistoryDays} days`);
+
+  let telemetry = { changes: 0 };
+  if (config.telemetryRetentionDays > 0) {
+    telemetry = db
+      .prepare(`DELETE FROM telemetry WHERE created_at <= datetime('now', ?)`)
+      .run(`-${config.telemetryRetentionDays} days`);
+  }
+
+  let alerts = { changes: 0 };
+  if (config.alertRetentionDays > 0) {
+    alerts = db
+      .prepare(`DELETE FROM alerts WHERE created_at <= datetime('now', ?)`)
+      .run(`-${config.alertRetentionDays} days`);
+  }
+
+  const total = closed.changes + telemetry.changes + alerts.changes;
+  if (total > 0) {
+    console.log(
+      `[prune] telemetry ${telemetry.changes}, alerts ${alerts.changes}, commands ${closed.changes}`
+    );
+  }
+  return total;
+}
+
 // ---- Alerts ----------------------------------------------------------------
 export function createAlert(level, message) {
   const info = db
@@ -211,18 +314,11 @@ export function runAutomation(reading) {
     const current = device.state ? 'ON' : 'OFF';
     if (current === desired) continue;
 
-    // Skip if a command for this device is already waiting/sent
-    const pending = db
-      .prepare(
-        `SELECT 1 FROM commands WHERE device_id = ? AND status != 'acked' LIMIT 1`
-      )
-      .get(deviceId);
-    if (pending) continue;
+    // Skip while an instruction for this device is still outstanding. Only
+    // 'pending'/'sent' count — expired and failed ones must not block forever.
+    if (hasLiveCommand(deviceId)) continue;
 
-    db.prepare(`INSERT INTO commands (device_id, action) VALUES (?, ?)`).run(
-      deviceId,
-      desired
-    );
+    enqueueCommand(deviceId, desired);
     createAlert(
       'info',
       `AUTO: ${deviceId} → ${desired} (${rule.metric} ${metricValue} ${rule.op} ${rule.value})`

@@ -58,8 +58,10 @@ export const openapiSpec = {
         description:
           'ESP32 master gửi trọn một lượt đọc. Khoảng cách siêu âm bằng `-1` (STM32 báo hết timeout) ' +
           'được lưu thành `null`. Chấp nhận cả tên biến gốc trong firmware ' +
-          '(`Temperature`, `Nitrogen`, `Dist1`, …) lẫn tên rút gọn.',
-        required: ['temperature', 'humidity', 'ph', 'ec'],
+          '(`Temperature`, `Nitrogen`, `Dist1`, …) lẫn tên rút gọn.\n\n' +
+          'Mọi trường đều **tùy chọn** — thiếu trường nào thì lưu `null` trường đó. ' +
+          'STM32 tận dụng điều này: khi chưa đọc được đầu dò RS485 lần nào nó chỉ gửi ' +
+          '4 khoảng cách siêu âm, tránh ghi nhận pH = 0 rồi bắn cảnh báo giả.',
         properties: {
           temperature: { type: 'number', example: 32.5 },
           humidity: { type: 'number', example: 78 },
@@ -97,8 +99,17 @@ export const openapiSpec = {
           id: { type: 'integer' },
           device_id: { type: 'string', example: 'van1' },
           action: { type: 'string', example: 'ON' },
-          status: { type: 'string', enum: ['pending', 'sent', 'acked'] },
+          status: {
+            type: 'string',
+            enum: ['pending', 'sent', 'acked', 'expired', 'superseded', 'failed'],
+            description:
+              'Lệnh gửi đi mà không được ack sẽ tự quay lại `pending` để thử lại; ' +
+              'quá số lần thử → `failed`; chờ quá lâu (master offline) → `expired`; ' +
+              'bị lệnh mới cho cùng thiết bị thay thế → `superseded`.',
+          },
+          attempts: { type: 'integer', example: 0 },
           created_at: { type: 'string' },
+          sent_at: { type: 'string', nullable: true },
           acked_at: { type: 'string', nullable: true },
         },
       },

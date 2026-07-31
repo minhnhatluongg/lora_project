@@ -29,6 +29,10 @@ export function useFarm() {
   const hoursRef = useRef(hours);
   hoursRef.current = hours;
 
+  // The very first 'connect' fires alongside the initial load; only later ones
+  // mean we missed something.
+  const firstConnect = useRef(true);
+
   const refresh = useCallback(async (h = hoursRef.current) => {
     try {
       const [l, hist, r, d, s, a, c] = await Promise.all([
@@ -60,7 +64,13 @@ export function useFarm() {
   }, [refresh, hours]);
 
   useEffect(() => {
-    const onConnect = () => setConnected(true);
+    const onConnect = () => {
+      setConnected(true);
+      // A reconnect means we were deaf for a while — anything that happened in
+      // the gap never reached us, so re-pull instead of trusting stale state.
+      if (!firstConnect.current) refresh().catch(console.error);
+      firstConnect.current = false;
+    };
     const onDisconnect = () => setConnected(false);
     const onTelemetry = (reading) => {
       setLatest(reading);

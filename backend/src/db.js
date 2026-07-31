@@ -53,13 +53,18 @@ db.exec(`
     sensor_error_at TEXT
   );
 
-  -- Command queue: frontend enqueues, ESP32 master polls + acks
+  -- Command queue: frontend enqueues, ESP32 master polls + acks.
+  -- status: pending -> sent -> acked, or -> expired / superseded / failed.
+  -- A command that is handed out but never acked goes back to 'pending' so a
+  -- master that reboots mid-command doesn't leave the device stuck forever.
   CREATE TABLE IF NOT EXISTS commands (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     device_id   TEXT NOT NULL,        -- 'pump','van1'..'van4','mode'
     action      TEXT NOT NULL,        -- 'ON' | 'OFF' | 'AUTO' | 'MANUAL'
-    status      TEXT NOT NULL DEFAULT 'pending', -- pending | sent | acked
+    status      TEXT NOT NULL DEFAULT 'pending',
+    attempts    INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    sent_at     TEXT,
     acked_at    TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_commands_status ON commands (status);
@@ -122,6 +127,10 @@ addMissingColumns('system_status', {
   sensor_status: 'TEXT',
   sensor_error_at: 'TEXT',
 });
+addMissingColumns('commands', {
+  attempts: 'INTEGER NOT NULL DEFAULT 0',
+  sent_at: 'TEXT',
+});
 
 const getMeta = (key) =>
   db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key)?.value;
@@ -137,6 +146,18 @@ if (Number(getMeta('schema_version') || 1) < 2) {
   if (info.changes > 0)
     console.log(`[db] migrated: ${info.changes} EC rows mS/cm -> µS/cm`);
   setMeta('schema_version', 2);
+}
+
+// v3: before the retry/expiry sweep existed, any command handed to a master
+// that then rebooted stayed 'sent' forever — and automation skips a device that
+// has a non-acked command, so that device went dead. Clear the backlog once.
+if (Number(getMeta('schema_version') || 1) < 3) {
+  const info = db
+    .prepare(`UPDATE commands SET status = 'expired' WHERE status = 'sent'`)
+    .run();
+  if (info.changes > 0)
+    console.log(`[db] migrated: released ${info.changes} stuck 'sent' commands`);
+  setMeta('schema_version', 3);
 }
 
 // --- Seed default rows if missing -------------------------------------------

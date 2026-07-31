@@ -8,7 +8,8 @@ import { DeviceControl } from '../components/DeviceControl.jsx';
 import { StatusPanel } from '../components/StatusPanel.jsx';
 import { RecentTable } from '../components/RecentTable.jsx';
 import { AlertsList } from '../components/AlertsList.jsx';
-import { SENSOR_STATUS_TEXT, timeAgo } from '../metrics.js';
+import { TimeAgo } from '../components/TimeAgo.jsx';
+import { SENSOR_STATUS_TEXT } from '../metrics.js';
 
 function Pill({ ok, children, title }) {
   return (
@@ -34,7 +35,11 @@ export function Dashboard() {
           <h1>Dashboard</h1>
           <p className="page-sub">
             Node STM32 · đầu dò đất RS485 (7 chỉ số) + 4 cảm biến siêu âm ·{' '}
-            {latest?.created_at ? `dữ liệu ${timeAgo(latest.created_at)}` : 'chưa có dữ liệu'}
+            {latest?.created_at ? (
+              <>dữ liệu <TimeAgo iso={latest.created_at} /></>
+            ) : (
+              'chưa có dữ liệu'
+            )}
           </p>
         </div>
         <div className="topbar-status">

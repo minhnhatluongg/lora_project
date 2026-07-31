@@ -1,8 +1,7 @@
 import { Router } from 'express';
-import { db } from '../db.js';
 import { asyncH } from '../middleware.js';
 import { requireAuth, canControl } from '../auth.js';
-import { getStatus, setMode } from '../services.js';
+import { getStatus, setMode, enqueueCommand } from '../services.js';
 
 export const statusRouter = Router();
 
@@ -26,9 +25,7 @@ statusRouter.post(
     if (!['AUTO', 'MANUAL'].includes(mode))
       return res.status(400).json({ error: "mode must be 'AUTO' or 'MANUAL'" });
 
-    db.prepare(`INSERT INTO commands (device_id, action) VALUES ('mode', ?)`).run(
-      mode
-    );
+    enqueueCommand('mode', mode);
     setMode(mode);
     res.json(getStatus());
   })
