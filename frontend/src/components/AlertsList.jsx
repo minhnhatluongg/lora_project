@@ -1,8 +1,4 @@
-function fmt(iso) {
-  if (!iso) return '';
-  const d = new Date(iso.replace(' ', 'T') + 'Z');
-  return d.toLocaleTimeString('vi-VN', { hour12: false });
-}
+import { fmtTime, fmtDateTime } from '../metrics.js';
 
 const ICON = { info: 'ℹ️', warning: '⚠️', danger: '🛑' };
 
@@ -14,7 +10,9 @@ export function AlertsList({ alerts }) {
         {(alerts || []).map((a) => (
           <li key={a.id} className={`alert alert-${a.level}`}>
             <span className="alert-icon">{ICON[a.level] || 'ℹ️'}</span>
-            <span className="alert-time">{fmt(a.created_at)}</span>
+            <span className="alert-time" title={fmtDateTime(a.created_at)}>
+              {fmtTime(a.created_at)}
+            </span>
             <span className="alert-msg">{a.message}</span>
           </li>
         ))}

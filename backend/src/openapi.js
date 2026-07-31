@@ -29,26 +29,57 @@ export const openapiSpec = {
     schemas: {
       Telemetry: {
         type: 'object',
+        description:
+          'Một lượt đọc của node STM32: 7 thanh ghi Modbus của đầu dò RS485 + 4 cảm biến siêu âm. ' +
+          '`level1..level4` là mức nước (%) do backend suy ra từ `dist1..dist4` và hiệu chuẩn bồn trong `/api/config`.',
         properties: {
           id: { type: 'integer' },
-          temperature: { type: 'number', example: 32.5 },
-          humidity: { type: 'number', example: 78 },
-          ph: { type: 'number', example: 6.45 },
-          ec: { type: 'number', example: 1.82 },
+          temperature: { type: 'number', example: 32.5, description: '°C' },
+          humidity: { type: 'number', example: 78, description: '% độ ẩm đất' },
+          ph: { type: 'number', example: 6.5 },
+          ec: { type: 'number', example: 1500, description: 'µS/cm (giá trị thô của đầu dò)' },
+          n: { type: 'integer', example: 120, description: 'Đạm, mg/kg' },
+          p: { type: 'integer', example: 60, description: 'Lân, mg/kg' },
+          k: { type: 'integer', example: 180, description: 'Kali, mg/kg' },
+          dist1: { type: 'number', nullable: true, example: 42.5, description: 'cm — null khi cảm biến không phản hồi' },
+          dist2: { type: 'number', nullable: true, example: 55 },
+          dist3: { type: 'number', nullable: true, example: 31.2 },
+          dist4: { type: 'number', nullable: true, example: null },
+          level1: { type: 'integer', nullable: true, example: 68, description: '% — suy ra, không lưu trong DB' },
+          level2: { type: 'integer', nullable: true, example: 47 },
+          level3: { type: 'integer', nullable: true, example: 81 },
+          level4: { type: 'integer', nullable: true, example: null },
           lora_rssi: { type: 'integer', example: -72 },
           created_at: { type: 'string', example: '2026-06-23 10:30:30' },
         },
       },
       TelemetryInput: {
         type: 'object',
+        description:
+          'ESP32 master gửi trọn một lượt đọc. Khoảng cách siêu âm bằng `-1` (STM32 báo hết timeout) ' +
+          'được lưu thành `null`. Chấp nhận cả tên biến gốc trong firmware ' +
+          '(`Temperature`, `Nitrogen`, `Dist1`, …) lẫn tên rút gọn.',
         required: ['temperature', 'humidity', 'ph', 'ec'],
         properties: {
           temperature: { type: 'number', example: 32.5 },
           humidity: { type: 'number', example: 78 },
-          ph: { type: 'number', example: 6.45 },
-          ec: { type: 'number', example: 1.82 },
+          ph: { type: 'number', example: 6.5 },
+          ec: { type: 'number', example: 1500, description: 'µS/cm' },
+          n: { type: 'integer', example: 120 },
+          p: { type: 'integer', example: 60 },
+          k: { type: 'integer', example: 180 },
+          dist1: { type: 'number', example: 42.5, description: 'cm, -1 = không có phản hồi' },
+          dist2: { type: 'number', example: 55 },
+          dist3: { type: 'number', example: 31.2 },
+          dist4: { type: 'number', example: -1 },
           lora_rssi: { type: 'integer', example: -72 },
           slave_online: { type: 'boolean', example: true },
+          sensor_status: {
+            type: 'string',
+            enum: ['OK', 'CRC', 'HEADER', 'TIMEOUT', 'SHORT'],
+            example: 'OK',
+            description: 'Kết quả giao dịch Modbus cuối cùng ở STM32',
+          },
         },
       },
       Device: {
@@ -78,6 +109,13 @@ export const openapiSpec = {
           masterOnline: { type: 'boolean' },
           slaveOnline: { type: 'boolean' },
           loraRssi: { type: 'integer', nullable: true },
+          sensorStatus: {
+            type: 'string',
+            nullable: true,
+            enum: ['OK', 'CRC', 'HEADER', 'TIMEOUT', 'SHORT'],
+            description: 'Trạng thái đường Modbus RS485 báo về từ STM32',
+          },
+          sensorErrorAt: { type: 'string', nullable: true },
         },
       },
       Alert: {
@@ -105,11 +143,29 @@ export const openapiSpec = {
           thresholds: {
             type: 'object',
             properties: {
-              phMin: { type: 'number' },
-              phMax: { type: 'number' },
-              ecMax: { type: 'number' },
-              tempMax: { type: 'number' },
-              humidityMin: { type: 'number' },
+              phMin: { type: 'number', example: 5.5 },
+              phMax: { type: 'number', example: 7.5 },
+              ecMax: { type: 'number', example: 2500, description: 'µS/cm' },
+              tempMax: { type: 'number', example: 40 },
+              humidityMin: { type: 'number', example: 30 },
+              nMin: { type: 'number', example: 50, description: 'mg/kg' },
+              pMin: { type: 'number', example: 30 },
+              kMin: { type: 'number', example: 60 },
+              tankLowPct: { type: 'number', example: 20, description: '% mức nước tối thiểu' },
+            },
+          },
+          tanks: {
+            type: 'object',
+            description:
+              'Hiệu chuẩn 2 điểm cho từng cảm biến siêu âm. Mức nước % = (emptyCm - dist) / (emptyCm - fullCm) × 100.',
+            additionalProperties: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', example: 'Bồn 1' },
+                enabled: { type: 'boolean' },
+                emptyCm: { type: 'number', example: 100, description: 'Khoảng cách đọc được khi bồn cạn' },
+                fullCm: { type: 'number', example: 15, description: 'Khoảng cách đọc được khi bồn đầy' },
+              },
             },
           },
           automation: {
@@ -120,7 +176,11 @@ export const openapiSpec = {
                 enabled: { type: 'boolean' },
                 metric: {
                   type: 'string',
-                  enum: ['temperature', 'humidity', 'ph', 'ec'],
+                  enum: [
+                    'temperature', 'humidity', 'ph', 'ec', 'n', 'p', 'k',
+                    'dist1', 'dist2', 'dist3', 'dist4',
+                    'level1', 'level2', 'level3', 'level4',
+                  ],
                 },
                 op: { type: 'string', enum: ['below', 'above'] },
                 value: { type: 'number' },

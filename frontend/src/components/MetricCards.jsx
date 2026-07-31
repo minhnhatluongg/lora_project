@@ -1,62 +1,54 @@
-function fmtTime(iso) {
-  if (!iso) return '--:--:--';
-  // SQLite stores 'YYYY-MM-DD HH:MM:SS' in UTC
-  const d = new Date(iso.replace(' ', 'T') + 'Z');
-  return d.toLocaleTimeString('vi-VN', { hour12: false });
-}
+import {
+  METRICS,
+  SOIL_KEYS,
+  fmtValue,
+  fmtTime,
+  metricStatus,
+  statusReason,
+  STATUS_COLOR,
+  STATUS_ICON,
+} from '../metrics.js';
+import { Sparkline } from './Sparkline.jsx';
 
-export function MetricCards({ latest }) {
-  const cards = [
-    {
-      key: 'temperature',
-      icon: '🌡️',
-      label: 'NHIỆT ĐỘ',
-      value: latest?.temperature,
-      unit: '°C',
-      cls: 'card-temp',
-    },
-    {
-      key: 'humidity',
-      icon: '💧',
-      label: 'ĐỘ ẨM',
-      value: latest?.humidity,
-      unit: '%',
-      cls: 'card-humidity',
-    },
-    {
-      key: 'ph',
-      icon: '⚗️',
-      label: 'pH',
-      value: latest?.ph,
-      unit: '',
-      cls: 'card-ph',
-    },
-    {
-      key: 'ec',
-      icon: '🧪',
-      label: 'EC',
-      value: latest?.ec,
-      unit: 'mS/cm',
-      cls: 'card-ec',
-    },
-  ];
-
+// The four headline soil readings from the RS485 probe, each with the trend of
+// the current window. Out-of-range state carries an icon + words, not just colour.
+export function MetricCards({ latest, history, thresholds }) {
   return (
     <section className="metric-cards">
-      {cards.map((c) => (
-        <div key={c.key} className={`metric-card ${c.cls}`}>
-          <div className="metric-icon">{c.icon}</div>
-          <div className="metric-body">
-            <span className="metric-label">{c.label}</span>
-            <span className="metric-value">
-              {c.value ?? '--'} <small>{c.unit}</small>
-            </span>
-            <span className="metric-updated">
-              Cập nhật: {fmtTime(latest?.created_at)}
-            </span>
-          </div>
-        </div>
-      ))}
+      {SOIL_KEYS.map((key) => {
+        const m = METRICS[key];
+        const value = latest?.[key];
+        const state = metricStatus(key, value, thresholds);
+        const reason = statusReason(key, value, thresholds);
+        const trend = (history || []).map((r) => r[key]);
+
+        return (
+          <article key={key} className={`metric-card${state && state !== 'ok' ? ' metric-alarm' : ''}`}>
+            <div className="metric-top">
+              <span className="metric-icon" style={{ background: `${m.color}22`, color: m.color }}>
+                {m.icon}
+              </span>
+              <span className="metric-label">{m.label.toUpperCase()}</span>
+            </div>
+
+            <div className="metric-value">
+              {fmtValue(value, key)}
+              {m.unit && <small>{m.unit}</small>}
+            </div>
+
+            <div className="metric-foot">
+              {state && state !== 'ok' ? (
+                <span className="metric-state" style={{ color: STATUS_COLOR[state] }}>
+                  {STATUS_ICON[state]} Ngoài ngưỡng ({reason})
+                </span>
+              ) : (
+                <span className="metric-updated">Cập nhật {fmtTime(latest?.created_at)}</span>
+              )}
+              <Sparkline values={trend} color={m.color} />
+            </div>
+          </article>
+        );
+      })}
     </section>
   );
 }

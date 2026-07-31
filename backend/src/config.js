@@ -15,11 +15,20 @@ export const config = {
   },
   dbFile: process.env.DB_FILE || './data/farm.db',
   masterTimeoutSeconds: Number(process.env.MASTER_TIMEOUT_SECONDS) || 30,
+  // Don't re-raise the same threshold alert more often than this.
+  alertRepeatSeconds: Number(process.env.ALERT_REPEAT_SECONDS) || 600,
   thresholds: {
     phMin: Number(process.env.PH_MIN) || 5.5,
     phMax: Number(process.env.PH_MAX) || 7.5,
-    ecMax: Number(process.env.EC_MAX) || 2.5,
+    // EC is stored exactly as the RS485 probe reports it: µS/cm (uint16).
+    ecMax: Number(process.env.EC_MAX) || 2500,
     tempMax: Number(process.env.TEMP_MAX) || 40,
     humidityMin: Number(process.env.HUMIDITY_MIN) || 30,
+    // NPK (mg/kg) — probe registers 5..7
+    nMin: Number(process.env.N_MIN) || 50,
+    pMin: Number(process.env.P_MIN) || 30,
+    kMin: Number(process.env.K_MIN) || 60,
+    // Ultrasonic tanks: warn below this fill level (%)
+    tankLowPct: Number(process.env.TANK_LOW_PCT) || 20,
   },
 };
