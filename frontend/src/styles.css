@@ -53,25 +53,25 @@ body {
 .pill-on { background: #14532d; color: #86efac; }
 .pill-off { background: #4c1d1d; color: #fca5a5; }
 
-/* ---- Metric cards ---- */
+/* ---- Metric cards (KPI row) ---- */
 .metric-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
 .metric-card {
   background: var(--panel); border: 1px solid var(--border);
-  border-radius: 14px; padding: 18px; display: flex; gap: 14px; align-items: center;
+  border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;
 }
+.metric-alarm { border-color: #7f1d1d; }
+.metric-top { display: flex; align-items: center; gap: 10px; }
 .metric-icon {
-  width: 52px; height: 52px; border-radius: 12px; display: grid; place-items: center;
-  font-size: 24px; flex-shrink: 0;
+  width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+  font-size: 17px; flex-shrink: 0;
 }
-.card-temp .metric-icon { background: #7f1d1d; }
-.card-humidity .metric-icon { background: #14532d; }
-.card-ph .metric-icon { background: #581c87; }
-.card-ec .metric-icon { background: #78350f; }
-.metric-body { display: flex; flex-direction: column; }
-.metric-label { font-size: 12px; color: var(--muted); letter-spacing: 0.5px; }
-.metric-value { font-size: 26px; font-weight: 700; }
-.metric-value small { font-size: 13px; color: var(--muted); font-weight: 500; }
-.metric-updated { font-size: 11px; color: #64748b; margin-top: 2px; }
+.metric-label { font-size: 11px; color: var(--muted); letter-spacing: 0.6px; font-weight: 600; }
+.metric-value { font-size: 30px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.metric-value small { font-size: 13px; color: var(--muted); font-weight: 500; margin-left: 4px; }
+.metric-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.metric-updated { font-size: 11px; color: #64748b; }
+.metric-state { font-size: 11px; font-weight: 600; }
+.sparkline { flex-shrink: 0; }
 
 /* ---- Panels ---- */
 .panel {
@@ -86,7 +86,66 @@ body {
 /* ---- Charts ---- */
 .charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
 .mini-chart { background: var(--panel-2); border-radius: 10px; padding: 10px; }
-.mini-chart-title { font-size: 12px; color: var(--muted); }
+.mini-chart-title { font-size: 12px; color: var(--muted); font-weight: 600; }
+.mini-chart-title em { font-style: normal; font-weight: 400; color: #64748b; }
+.chart-head { flex-wrap: wrap; gap: 10px; }
+.chart-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.chart-tooltip {
+  background: #0b1220; border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; font-size: 12px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+.chart-tooltip-time { color: var(--muted); margin-bottom: 6px; font-size: 11px; }
+.chart-tooltip-row { display: flex; align-items: center; gap: 8px; padding: 1px 0; }
+.chart-tooltip-name { color: var(--muted); margin-right: auto; }
+.chart-tooltip-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+.chart-swatch { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+
+/* ---- Segmented control (chart tabs, time range, table views) ---- */
+.seg {
+  display: inline-flex; background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 2px;
+}
+.seg-btn {
+  border: none; background: transparent; color: var(--muted); cursor: pointer;
+  font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 6px;
+}
+.seg-btn:hover { color: var(--text); }
+.seg-active { background: #1e3a5f; color: #bfdbfe; }
+
+/* ---- NPK bars ---- */
+.panel-sub { font-size: 11px; color: #64748b; }
+.npk-list { display: flex; flex-direction: column; gap: 14px; }
+.npk-row { display: grid; grid-template-columns: 110px 1fr 96px; align-items: center; gap: 10px; }
+.npk-name { font-size: 12px; color: var(--muted); }
+.npk-track { position: relative; height: 12px; background: var(--panel-2); border-radius: 6px; }
+.npk-fill { height: 100%; border-radius: 6px; transition: width 0.4s ease; }
+.npk-min {
+  position: absolute; top: -3px; bottom: -3px; width: 2px;
+  background: var(--muted); opacity: 0.65; border-radius: 1px;
+}
+.npk-value { font-size: 13px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.npk-value em { font-style: normal; font-size: 11px; font-weight: 600; }
+
+/* ---- Water tanks ---- */
+.tank-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.tank { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.tank-body {
+  position: relative; width: 100%; max-width: 110px; height: 118px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden; display: grid; place-items: center;
+}
+.tank-fill {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  opacity: 0.35; transition: height 0.5s ease, background 0.3s ease;
+}
+.tank-pct {
+  position: relative; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.tank figcaption { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.tank figcaption strong { font-size: 13px; }
+.tank-state { font-size: 11px; font-weight: 600; }
+.tank-dist { font-size: 11px; color: #64748b; }
 
 /* ---- Device control ---- */
 .mode-switch { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
@@ -127,7 +186,11 @@ body {
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); }
-th { color: var(--muted); font-weight: 600; }
+th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+th em { font-style: normal; font-weight: 400; color: #64748b; }
+/* Numbers align on their decimal point so columns scan vertically. */
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.nowrap { white-space: nowrap; }
 .empty { color: var(--muted); text-align: center; padding: 16px; }
 
 /* ---- Alerts ---- */
@@ -168,8 +231,13 @@ th { color: var(--muted); font-weight: 600; }
 .login-hint { text-align: center; color: #64748b; font-size: 12px; margin: 14px 0 0; }
 
 /* ---- Topbar user + page head ---- */
-.page-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.page-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+}
 .page-head h1 { font-size: 22px; margin: 0; }
+.page-sub { color: var(--muted); font-size: 12.5px; margin: 4px 0 0; }
+.topbar-status { flex-wrap: wrap; }
 .user-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); }
 .user-role { background: var(--blue); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 999px; }
 .logout-btn {
@@ -186,6 +254,9 @@ th { color: var(--muted); font-weight: 600; }
 }
 .primary-btn:disabled { opacity: 0.6; }
 .form-msg { background: var(--panel-2); border: 1px solid var(--border); padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
+.form-msg.error { border-color: #7f1d1d; color: #fca5a5; }
+.rule-desc code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+.hint code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
 .threshold-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
 .field input, .num-input, .user-form input, .user-form select, td select {
@@ -203,10 +274,23 @@ th { color: var(--muted); font-weight: 600; }
 }
 .row-actions button.danger { color: #fca5a5; border-color: #7f1d1d; }
 
+@media (max-width: 1280px) {
+  .grid-2 { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 1000px) {
   .metric-cards { grid-template-columns: repeat(2, 1fr); }
-  .grid-2 { grid-template-columns: 1fr; }
   .charts-grid { grid-template-columns: 1fr; }
   .device-grid { grid-template-columns: repeat(2, 1fr); }
+  .tank-grid { grid-template-columns: repeat(2, 1fr); }
   .sidebar { display: none; }
+  .content { padding: 16px; }
+}
+
+@media (max-width: 620px) {
+  .metric-cards { grid-template-columns: 1fr; }
+  .tank-grid { grid-template-columns: 1fr; }
+  .npk-row { grid-template-columns: 90px 1fr 80px; }
+  .chart-controls { width: 100%; }
+  .seg { flex-wrap: wrap; }
 }

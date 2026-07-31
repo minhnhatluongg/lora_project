@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { deviceAuth, asyncH } from '../middleware.js';
 import { requireAuth, canControl } from '../auth.js';
-import { getDevices, setDeviceState } from '../services.js';
+import { getDevices, setDeviceState, enqueueCommand } from '../services.js';
 
 export const devicesRouter = Router();
 
@@ -30,16 +30,9 @@ devicesRouter.post(
     if (!['ON', 'OFF'].includes(action))
       return res.status(400).json({ error: "action must be 'ON' or 'OFF'" });
 
-    const info = db
-      .prepare(`INSERT INTO commands (device_id, action) VALUES (?, ?)`)
-      .run(id, action);
-
-    res.status(202).json({
-      id: info.lastInsertRowid,
-      device_id: id,
-      action,
-      status: 'pending',
-    });
+    // Replaces any instruction still outstanding for this device, so mashing
+    // the button doesn't queue up a sequence that replays later.
+    res.status(202).json(enqueueCommand(id, action));
   })
 );
 

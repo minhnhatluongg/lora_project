@@ -37,6 +37,9 @@ export function getStatus() {
     loraRssi: row.lora_rssi,
     masterSeenAt: row.master_seen_at,
     slaveSeenAt: row.slave_seen_at,
+    // Result of the last Modbus RS485 transaction reported by the STM32 node.
+    sensorStatus: row.sensor_status || null,
+    sensorErrorAt: row.sensor_error_at,
   };
 }
 
@@ -45,7 +48,7 @@ export function setMode(mode) {
   emit(EVENTS.STATUS, getStatus());
 }
 
-export function touchMaster({ loraRssi, slaveOnline } = {}) {
+export function touchMaster({ loraRssi, slaveOnline, sensorStatus } = {}) {
   const fields = [`master_seen_at = datetime('now')`];
   const params = [];
   if (loraRssi !== undefined && loraRssi !== null) {
@@ -56,9 +59,117 @@ export function touchMaster({ loraRssi, slaveOnline } = {}) {
     fields.push(`slave_online = ?`, `slave_seen_at = datetime('now')`);
     params.push(slaveOnline ? 1 : 0);
   }
+  if (sensorStatus) {
+    fields.push(`sensor_status = ?`);
+    params.push(sensorStatus);
+    if (sensorStatus !== 'OK') fields.push(`sensor_error_at = datetime('now')`);
+  }
   db.prepare(`UPDATE system_status SET ${fields.join(', ')} WHERE id = 1`).run(
     ...params
   );
+}
+
+// ---- Command queue ---------------------------------------------------------
+// Statuses that still represent "the master owes us this action".
+const LIVE_COMMAND_STATUSES = `('pending', 'sent')`;
+
+// Queue a command, replacing anything still outstanding for the same device.
+// Pressing ON then OFF must leave ONE instruction, not two that replay in order.
+export function enqueueCommand(deviceId, action) {
+  db.prepare(
+    `UPDATE commands SET status = 'superseded'
+     WHERE device_id = ? AND status IN ${LIVE_COMMAND_STATUSES}`
+  ).run(deviceId);
+
+  const info = db
+    .prepare(`INSERT INTO commands (device_id, action) VALUES (?, ?)`)
+    .run(deviceId, action);
+  return db.prepare(`SELECT * FROM commands WHERE id = ?`).get(info.lastInsertRowid);
+}
+
+export function hasLiveCommand(deviceId) {
+  return !!db
+    .prepare(
+      `SELECT 1 FROM commands WHERE device_id = ?
+       AND status IN ${LIVE_COMMAND_STATUSES} LIMIT 1`
+    )
+    .get(deviceId);
+}
+
+// Keeps the queue honest. Runs before every poll AND on a timer, so a device
+// recovers even while the master is away.
+export function sweepCommands() {
+  const { commandRetrySeconds, commandMaxAttempts, commandTtlSeconds } = config;
+
+  // 1. Handed out but never acked -> offer it again (master rebooted mid-command).
+  const retried = db
+    .prepare(
+      `UPDATE commands SET status = 'pending', sent_at = NULL, attempts = attempts + 1
+       WHERE status = 'sent' AND attempts < ?
+         AND sent_at <= datetime('now', ?)`
+    )
+    .run(commandMaxAttempts, `-${commandRetrySeconds} seconds`);
+
+  // 2. Retried too many times -> stop looping, let automation move on.
+  const failed = db
+    .prepare(
+      `UPDATE commands SET status = 'failed'
+       WHERE status = 'sent' AND attempts >= ?
+         AND sent_at <= datetime('now', ?)`
+    )
+    .run(commandMaxAttempts, `-${commandRetrySeconds} seconds`);
+
+  // 3. Queued while the master was offline for ages -> don't replay stale intent
+  //    at whatever the field looks like now.
+  const expired = db
+    .prepare(
+      `UPDATE commands SET status = 'expired'
+       WHERE status = 'pending' AND created_at <= datetime('now', ?)`
+    )
+    .run(`-${commandTtlSeconds} seconds`);
+
+  const changed = retried.changes + failed.changes + expired.changes;
+  if (changed > 0) {
+    if (failed.changes)
+      createAlert('warning', `${failed.changes} lệnh không được xác nhận sau ${commandMaxAttempts} lần thử`);
+    if (expired.changes)
+      createAlert('info', `${expired.changes} lệnh quá hạn đã bị hủy (master offline quá lâu)`);
+  }
+  return changed;
+}
+
+// Housekeeping. At ~1 reading every 2.5s a node writes ~35k telemetry rows a
+// day, so without this the file grows without bound.
+export function pruneOldData() {
+  const closed = db
+    .prepare(
+      `DELETE FROM commands
+       WHERE status NOT IN ${LIVE_COMMAND_STATUSES}
+         AND created_at <= datetime('now', ?)`
+    )
+    .run(`-${config.commandHistoryDays} days`);
+
+  let telemetry = { changes: 0 };
+  if (config.telemetryRetentionDays > 0) {
+    telemetry = db
+      .prepare(`DELETE FROM telemetry WHERE created_at <= datetime('now', ?)`)
+      .run(`-${config.telemetryRetentionDays} days`);
+  }
+
+  let alerts = { changes: 0 };
+  if (config.alertRetentionDays > 0) {
+    alerts = db
+      .prepare(`DELETE FROM alerts WHERE created_at <= datetime('now', ?)`)
+      .run(`-${config.alertRetentionDays} days`);
+  }
+
+  const total = closed.changes + telemetry.changes + alerts.changes;
+  if (total > 0) {
+    console.log(
+      `[prune] telemetry ${telemetry.changes}, alerts ${alerts.changes}, commands ${closed.changes}`
+    );
+  }
+  return total;
 }
 
 // ---- Alerts ----------------------------------------------------------------
@@ -73,7 +184,23 @@ export function createAlert(level, message) {
   return alert;
 }
 
-// ---- Config (thresholds + automation rules) --------------------------------
+// Readings arrive every few seconds, so a value parked outside its threshold
+// would otherwise produce hundreds of identical alerts. Raise one per
+// condition, then stay quiet until it clears or the repeat window elapses.
+const activeConditions = new Map(); // key -> timestamp of last alert
+
+function raise(key, level, message) {
+  const last = activeConditions.get(key) || 0;
+  if (Date.now() - last < config.alertRepeatSeconds * 1000) return;
+  activeConditions.set(key, Date.now());
+  createAlert(level, message);
+}
+
+function clearCondition(key) {
+  activeConditions.delete(key);
+}
+
+// ---- Config (thresholds + tank calibration + automation rules) --------------
 export function getConfig() {
   const row = db.prepare(`SELECT data FROM app_config WHERE id = 1`).get();
   return JSON.parse(row.data);
@@ -86,22 +213,82 @@ export function setConfig(next) {
   return next;
 }
 
-// Inspect a telemetry reading against the CONFIGURED thresholds and raise alerts.
-export function checkThresholds({ ph, ec, temperature, humidity }) {
-  const t = getConfig().thresholds;
-  if (ph != null && ph < t.phMin)
-    createAlert('warning', `pH thấp hơn ngưỡng (${t.phMin})`);
-  if (ph != null && ph > t.phMax)
-    createAlert('warning', `pH cao hơn ngưỡng (${t.phMax})`);
-  if (ec != null && ec > t.ecMax)
-    createAlert('warning', `EC cao hơn ngưỡng (${t.ecMax} mS/cm)`);
-  if (temperature != null && temperature > t.tempMax)
-    createAlert('danger', `Nhiệt độ cao hơn ngưỡng (${t.tempMax}°C)`);
-  if (humidity != null && humidity < t.humidityMin)
-    createAlert('warning', `Độ ẩm thấp hơn ngưỡng (${t.humidityMin}%)`);
+// ---- Ultrasonic tanks ------------------------------------------------------
+export const TANK_IDS = ['dist1', 'dist2', 'dist3', 'dist4'];
+
+// Convert an air-gap distance (cm) into a fill level (%) using the tank's
+// two-point calibration. Returns null when the reading or calibration is unusable.
+export function tankLevelPct(distanceCm, tank) {
+  if (distanceCm == null || !tank) return null;
+  const { emptyCm, fullCm } = tank;
+  if (emptyCm == null || fullCm == null || emptyCm === fullCm) return null;
+  const pct = ((emptyCm - distanceCm) / (emptyCm - fullCm)) * 100;
+  return Math.round(Math.max(0, Math.min(100, pct)));
+}
+
+// Attach level1..level4 (%) to a telemetry row so every client sees the same
+// numbers without re-implementing the calibration maths.
+export function withLevels(row, cfg = getConfig()) {
+  if (!row) return row;
+  const levels = {};
+  TANK_IDS.forEach((distKey, i) => {
+    levels[`level${i + 1}`] = tankLevelPct(row[distKey], cfg.tanks?.[distKey]);
+  });
+  return { ...row, ...levels };
+}
+
+export const withLevelsAll = (rows) => {
+  const cfg = getConfig();
+  return (rows || []).map((r) => withLevels(r, cfg));
+};
+
+// ---- Threshold checks ------------------------------------------------------
+// `reading` is a telemetry row already enriched with level1..level4.
+export function checkThresholds(reading) {
+  const cfg = getConfig();
+  const t = cfg.thresholds;
+  const { ph, ec, temperature, humidity, n, p, k } = reading;
+
+  const check = (key, active, level, message) =>
+    active ? raise(key, level, message) : clearCondition(key);
+
+  check('ph-low', ph != null && ph < t.phMin, 'warning',
+    `pH ${ph} thấp hơn ngưỡng (${t.phMin})`);
+  check('ph-high', ph != null && ph > t.phMax, 'warning',
+    `pH ${ph} cao hơn ngưỡng (${t.phMax})`);
+  check('ec-high', ec != null && ec > t.ecMax, 'warning',
+    `EC ${ec} µS/cm cao hơn ngưỡng (${t.ecMax} µS/cm)`);
+  check('temp-high', temperature != null && temperature > t.tempMax, 'danger',
+    `Nhiệt độ ${temperature}°C cao hơn ngưỡng (${t.tempMax}°C)`);
+  check('humidity-low', humidity != null && humidity < t.humidityMin, 'warning',
+    `Độ ẩm đất ${humidity}% thấp hơn ngưỡng (${t.humidityMin}%)`);
+
+  check('n-low', n != null && n < t.nMin, 'warning',
+    `Đạm (N) ${n} mg/kg thấp hơn ngưỡng (${t.nMin})`);
+  check('p-low', p != null && p < t.pMin, 'warning',
+    `Lân (P) ${p} mg/kg thấp hơn ngưỡng (${t.pMin})`);
+  check('k-low', k != null && k < t.kMin, 'warning',
+    `Kali (K) ${k} mg/kg thấp hơn ngưỡng (${t.kMin})`);
+
+  TANK_IDS.forEach((distKey, i) => {
+    const tank = cfg.tanks?.[distKey];
+    if (!tank?.enabled) return clearCondition(`tank-${i + 1}`);
+    const pct = reading[`level${i + 1}`];
+    check(`tank-${i + 1}`, pct != null && pct < t.tankLowPct, 'danger',
+      `${tank.name} còn ${pct}% — dưới ngưỡng (${t.tankLowPct}%)`);
+    check(`tank-${i + 1}-err`, reading[distKey] == null, 'warning',
+      `${tank.name}: cảm biến siêu âm không phản hồi`);
+  });
 }
 
 // ---- AUTO-mode automation engine -------------------------------------------
+// Metrics a rule may reference. Raw probe values plus the derived tank levels.
+export const AUTOMATION_METRICS = [
+  'temperature', 'humidity', 'ph', 'ec', 'n', 'p', 'k',
+  'dist1', 'dist2', 'dist3', 'dist4',
+  'level1', 'level2', 'level3', 'level4',
+];
+
 // On each telemetry reading, when the system is in AUTO mode, evaluate every
 // enabled rule. If a device's desired state differs from its current state and
 // there's no pending command yet, enqueue a command for the ESP32 to execute.
@@ -127,18 +314,11 @@ export function runAutomation(reading) {
     const current = device.state ? 'ON' : 'OFF';
     if (current === desired) continue;
 
-    // Skip if a command for this device is already waiting/sent
-    const pending = db
-      .prepare(
-        `SELECT 1 FROM commands WHERE device_id = ? AND status != 'acked' LIMIT 1`
-      )
-      .get(deviceId);
-    if (pending) continue;
+    // Skip while an instruction for this device is still outstanding. Only
+    // 'pending'/'sent' count — expired and failed ones must not block forever.
+    if (hasLiveCommand(deviceId)) continue;
 
-    db.prepare(`INSERT INTO commands (device_id, action) VALUES (?, ?)`).run(
-      deviceId,
-      desired
-    );
+    enqueueCommand(deviceId, desired);
     createAlert(
       'info',
       `AUTO: ${deviceId} → ${desired} (${rule.metric} ${metricValue} ${rule.op} ${rule.value})`

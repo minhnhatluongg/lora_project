@@ -7,7 +7,13 @@ import { openapiSpec } from './openapi.js';
 
 import { config } from './config.js';
 import './db.js'; // initialize schema
-import { setIO } from './realtime.js';
+import { setIO, emit, EVENTS } from './realtime.js';
+import {
+  getStatus,
+  sweepCommands,
+  pruneOldData,
+  createAlert,
+} from './services.js';
 import { telemetryRouter } from './routes/telemetry.js';
 import { devicesRouter } from './routes/devices.js';
 import { commandsRouter } from './routes/commands.js';
@@ -70,6 +76,49 @@ app.use((err, _req, res, _next) => {
   console.error(err);
   res.status(500).json({ error: err.message || 'Server error' });
 });
+
+// --- Background heartbeat ---------------------------------------------------
+// masterOnline is derived from "how long since the last POST", so nothing
+// *happens* when a master dies — without this tick the dashboard would show it
+// ONLINE forever. Also runs the queue sweep so a device recovers from a stuck
+// command even while no master is polling.
+let lastBroadcast = null;
+
+const heartbeat = setInterval(() => {
+  try {
+    sweepCommands();
+
+    const status = getStatus();
+    const signature = JSON.stringify([
+      status.masterOnline,
+      status.slaveOnline,
+      status.mode,
+      status.sensorStatus,
+    ]);
+    if (signature === lastBroadcast) return;
+
+    // Announce the transition once, not on every tick.
+    if (lastBroadcast !== null && !status.masterOnline) {
+      createAlert('danger', 'Mất kết nối với ESP32 Master (không có dữ liệu mới)');
+    }
+    lastBroadcast = signature;
+    emit(EVENTS.STATUS, status);
+  } catch (err) {
+    console.error('[heartbeat]', err);
+  }
+}, 5000);
+heartbeat.unref?.();
+
+// Housekeeping once an hour (and once at startup).
+pruneOldData();
+const pruner = setInterval(() => {
+  try {
+    pruneOldData();
+  } catch (err) {
+    console.error('[prune]', err);
+  }
+}, 60 * 60 * 1000);
+pruner.unref?.();
 
 httpServer.listen(config.port, () => {
   console.log(`\n🌱 LoRa farm backend running on http://localhost:${config.port}`);

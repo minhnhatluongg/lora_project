@@ -15,7 +15,8 @@ configRouter.get(
 );
 
 // PUT /api/config -> update (admin/technician only).
-// Body may contain { thresholds, automation } (partial merge supported).
+// Body may contain { thresholds, tanks, automation }. Sections merge shallowly;
+// tanks/automation merge one level deeper so a partial rule keeps its other keys.
 configRouter.put(
   '/',
   requireAuth,
@@ -23,9 +24,19 @@ configRouter.put(
   asyncH((req, res) => {
     const current = getConfig();
     const body = req.body || {};
+
+    const mergeEntries = (base, patch) => {
+      const out = { ...base };
+      for (const [id, value] of Object.entries(patch || {})) {
+        out[id] = { ...(base[id] || {}), ...value };
+      }
+      return out;
+    };
+
     const next = {
       thresholds: { ...current.thresholds, ...(body.thresholds || {}) },
-      automation: { ...current.automation, ...(body.automation || {}) },
+      tanks: mergeEntries(current.tanks, body.tanks),
+      automation: mergeEntries(current.automation, body.automation),
     };
     res.json(setConfig(next));
   })
