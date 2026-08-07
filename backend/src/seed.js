@@ -52,8 +52,8 @@ db.prepare(`UPDATE system_status SET sensor_status = 'OK' WHERE id = 1`).run();
 // A couple of sample alerts
 db.prepare('DELETE FROM alerts').run();
 db.prepare(`INSERT INTO alerts (level, message) VALUES ('warning','pH 5.4 thấp hơn ngưỡng (5.5)')`).run();
-db.prepare(`INSERT INTO alerts (level, message) VALUES ('warning','Đạm (N) 42 mg/kg thấp hơn ngưỡng (50)')`).run();
-db.prepare(`INSERT INTO alerts (level, message) VALUES ('danger','Bồn 1 còn 12% — dưới ngưỡng (20%)')`).run();
+db.prepare(`INSERT INTO alerts (level, message) VALUES ('warning','Đạm (N) 42 ppm thấp hơn ngưỡng (50)')`).run();
+db.prepare(`INSERT INTO alerts (level, message) VALUES ('danger','Bồn Kali còn 12% — dưới ngưỡng (20%)')`).run();
 
 console.log(`Seeded ${POINTS} telemetry rows (T/H/EC/pH/NPK + 4 bồn) + 3 alerts.`);
 process.exit(0);

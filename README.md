@@ -27,9 +27,9 @@ Full-stack cho node cảm biến STM32 + ESP32 Master:
 | `Temperature` | 1 | `temperature` | °C | raw / 10 |
 | `EC_Value` | 2 | `ec` | **µS/cm** | giữ nguyên giá trị thô (1000 µS/cm = 1 mS/cm) |
 | `pH_Value` | 3 | `ph` | — | raw / 10 |
-| `Nitrogen` | 4 | `n` | mg/kg | |
-| `Phosphorus` | 5 | `p` | mg/kg | |
-| `Potassium` | 6 | `k` | mg/kg | |
+| `Nitrogen` | 4 | `n` | ppm | 1 mg/kg = 1 ppm |
+| `Phosphorus` | 5 | `p` | ppm | 1 mg/kg = 1 ppm |
+| `Potassium` | 6 | `k` | ppm | 1 mg/kg = 1 ppm |
 | `Dist1..Dist4` | — | `dist1..dist4` | cm | `-1` (hết timeout) → lưu `null` |
 | — | — | `level1..level4` | % | **suy ra** từ `dist` + hiệu chuẩn bồn, không lưu DB |
 | các nhánh lỗi Modbus | — | `sensor_status` | — | `OK` / `CRC` / `HEADER` / `TIMEOUT` / `SHORT` |
@@ -181,7 +181,7 @@ ESP32 đọc tới `\n`, chèn thêm `lora_rssi` + `slave_online` rồi POST th�
 | PUT | `/api/config` | admin, technician | Cập nhật (merge từng phần, sâu 1 cấp với `tanks`/`automation`) |
 
 Ngưỡng gồm: `phMin`, `phMax`, `ecMax` (µS/cm), `tempMax`, `humidityMin`,
-`nMin`, `pMin`, `kMin` (mg/kg), `tankLowPct` (%).
+`nMin`, `pMin`, `kMin` (ppm), `tankLowPct` (%).
 
 ### Telemetry (dữ liệu cảm biến)
 | Method | Endpoint | Mô tả |
@@ -285,18 +285,31 @@ lora_project/
 
 ## 5b. Dashboard có gì
 
+Giao diện nền sáng, nhãn song ngữ Việt–Anh, dựng theo đúng thiết kế bảng điều
+khiển của nhóm.
+
+**Hai hàng thẻ tổng quan** (nhìn phát biết ngay, không cần cuộn):
+
+| Hàng | Thẻ |
+|---|---|
+| 1 | Nhiệt độ · Độ ẩm · pH · EC · **Kali & Đạm** (2 chỉ số hệ thống thực sự châm) |
+| 2 | Trạng thái bơm · Trạng thái van · LoRa · **Mực nước 4 bồn** (Kali / Đạm / Nước / Trộn) |
+
+**Cuộn xuống là phần đi sâu:**
+
 | Khu vực | Nội dung |
 |---|---|
-| Thẻ KPI | Nhiệt độ · Độ ẩm · pH · EC — kèm sparkline xu hướng và trạng thái ngoài ngưỡng (biểu tượng + chữ, không chỉ dựa vào màu) |
-| Mực nước bồn | 4 ống đo, màu theo trạng thái (bình thường / cạn / nguy hiểm), hiện cả khoảng cách thô và trường hợp mất tín hiệu |
 | Biểu đồ | 3 tab (Môi trường đất · Dinh dưỡng NPK · Mực nước) × 4 mốc thời gian (1h / 6h / 24h / 7 ngày), tooltip chung + crosshair |
 | Trạng thái hệ thống | Master, Slave, **đường Modbus RS485**, chất lượng RSSI, độ trễ dữ liệu, kênh realtime, chế độ |
-| Dinh dưỡng NPK | 3 thanh trên cùng thang mg/kg, có vạch ngưỡng tối thiểu |
+| Dinh dưỡng NPK | 3 thanh trên cùng thang ppm (có cả Lân), có vạch ngưỡng tối thiểu |
+| Điều khiển | AUTO/MANUAL + bật tắt bơm và 4 van |
 | Bảng dữ liệu | 2 chế độ xem (Đất + NPK / Bồn nước) — bản text của mọi con số trên dashboard |
 
-Bảng màu chuỗi dữ liệu đã được kiểm tra tự động trên nền tối: dải sáng, độ bão
-hòa, tương phản, và khoảng cách màu dưới 3 dạng mù màu (protan/deutan/tritan).
-Màu trạng thái (xanh/vàng/đỏ) được giữ riêng, không bao giờ dùng làm màu chuỗi.
+Bốn màu chuỗi dữ liệu (xanh dương · xanh lá ngọc · tím hồng · cam) lấy từ thiết
+kế bảng điều khiển rồi kiểm tra tự động trên nền trắng: mọi cặp cách nhau ≥ 9.7 ΔE
+dưới cả ba dạng mù màu (protan/deutan/tritan), nằm trong dải sáng và đạt tương
+phản ≥ 3:1. Màu trạng thái (xanh/vàng/đỏ) giữ riêng, không bao giờ dùng làm màu
+chuỗi, và trạng thái luôn kèm biểu tượng + chữ chứ không chỉ dựa vào màu.
 
 ---
 

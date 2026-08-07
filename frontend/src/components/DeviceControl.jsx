@@ -1,10 +1,8 @@
-const ICONS = {
-  pump: '🚰',
-  van1: '🔧',
-  van2: '🔧',
-  van3: '🔧',
-  van4: '🔧',
-};
+import { IconPump, IconValve } from './Icons.jsx';
+import { METRICS } from '../metrics.js';
+
+const ICONS = { pump: IconPump };
+const ACCENT = { pump: METRICS.humidity.color };
 
 export function DeviceControl({ devices, mode, readOnly = false, onToggle, onSetMode }) {
   // Manual buttons are off when in AUTO mode OR when the user can't control.
@@ -36,9 +34,15 @@ export function DeviceControl({ devices, mode, readOnly = false, onToggle, onSet
       <div className="device-grid">
         {(devices || []).map((d) => {
           const on = d.state === 'ON';
+          const Icon = ICONS[d.id] || IconValve;
           return (
             <div key={d.id} className="device-card">
-              <div className="device-icon">{ICONS[d.id] || '🔧'}</div>
+              <div
+                className="device-icon"
+                style={{ color: ACCENT[d.id] || METRICS.ec.color }}
+              >
+                <Icon size={34} />
+              </div>
               <span className="device-name">{d.name}</span>
               <button
                 className={`device-btn ${on ? 'btn-on' : 'btn-off'}`}

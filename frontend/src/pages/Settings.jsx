@@ -21,9 +21,9 @@ const THRESHOLD_FIELDS = [
   { key: 'ecMax', label: 'EC tối đa (µS/cm)', step: 50 },
   { key: 'tempMax', label: 'Nhiệt độ tối đa (°C)', step: 0.5 },
   { key: 'humidityMin', label: 'Độ ẩm đất tối thiểu (%)', step: 1 },
-  { key: 'nMin', label: 'Đạm N tối thiểu (mg/kg)', step: 5 },
-  { key: 'pMin', label: 'Lân P tối thiểu (mg/kg)', step: 5 },
-  { key: 'kMin', label: 'Kali K tối thiểu (mg/kg)', step: 5 },
+  { key: 'nMin', label: 'Đạm N tối thiểu (ppm)', step: 5 },
+  { key: 'pMin', label: 'Lân P tối thiểu (ppm)', step: 5 },
+  { key: 'kMin', label: 'Kali K tối thiểu (ppm)', step: 5 },
   { key: 'tankLowPct', label: 'Mức nước cạn (%)', step: 1 },
 ];
 

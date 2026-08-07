@@ -264,11 +264,11 @@ export function checkThresholds(reading) {
     `Độ ẩm đất ${humidity}% thấp hơn ngưỡng (${t.humidityMin}%)`);
 
   check('n-low', n != null && n < t.nMin, 'warning',
-    `Đạm (N) ${n} mg/kg thấp hơn ngưỡng (${t.nMin})`);
+    `Đạm (N) ${n} ppm thấp hơn ngưỡng (${t.nMin})`);
   check('p-low', p != null && p < t.pMin, 'warning',
-    `Lân (P) ${p} mg/kg thấp hơn ngưỡng (${t.pMin})`);
+    `Lân (P) ${p} ppm thấp hơn ngưỡng (${t.pMin})`);
   check('k-low', k != null && k < t.kMin, 'warning',
-    `Kali (K) ${k} mg/kg thấp hơn ngưỡng (${t.kMin})`);
+    `Kali (K) ${k} ppm thấp hơn ngưỡng (${t.kMin})`);
 
   TANK_IDS.forEach((distKey, i) => {
     const tank = cfg.tanks?.[distKey];

@@ -21,11 +21,12 @@ import { RANGES } from '../useFarm.js';
 
 const TABS = [
   { id: 'soil', label: 'Môi trường đất', keys: SOIL_KEYS, mode: 'small-multiples' },
-  { id: 'npk', label: 'Dinh dưỡng NPK', keys: NPK_KEYS, mode: 'combined', unit: 'mg/kg' },
+  { id: 'npk', label: 'Dinh dưỡng NPK', keys: NPK_KEYS, mode: 'combined', unit: 'ppm' },
   { id: 'water', label: 'Mực nước bồn', keys: LEVEL_KEYS, mode: 'combined', unit: '%', domain: [0, 100] },
 ];
 
-const GRID = '#1e293b';
+// Recessive grid/axis on the white chart surface — the data should carry the ink.
+const GRID = '#e6ebf2';
 const AXIS_INK = '#64748b';
 
 function ChartTooltip({ active, payload, label }) {
@@ -116,7 +117,7 @@ export function RealtimeCharts({ history, hours, onHoursChange }) {
                       {...axisProps}
                     />
                     <YAxis domain={['auto', 'auto']} width={44} {...axisProps} />
-                    <Tooltip content={<ChartTooltip />} cursor={{ stroke: '#475569', strokeWidth: 1 }} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ stroke: '#94a3b8', strokeWidth: 1 }} />
                     <Line
                       type="monotone"
                       dataKey={key}
@@ -157,10 +158,10 @@ export function RealtimeCharts({ history, hours, onHoursChange }) {
               }}
               {...axisProps}
             />
-            <Tooltip content={<ChartTooltip />} cursor={{ stroke: '#475569', strokeWidth: 1 }} />
+            <Tooltip content={<ChartTooltip />} cursor={{ stroke: '#94a3b8', strokeWidth: 1 }} />
             <Legend
               iconType="plainline"
-              wrapperStyle={{ fontSize: 12, color: '#94a3b8', paddingTop: 8 }}
+              wrapperStyle={{ fontSize: 12, color: '#64748b', paddingTop: 8 }}
               formatter={(key) => METRICS[key]?.label || key}
             />
             {active.keys.map((key) => (

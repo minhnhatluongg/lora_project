@@ -244,7 +244,7 @@ Cột *Đọc hiện tại* hiển thị ngay kết quả quy đổi để bạn
 sử cũng tự sửa theo**.
 
 Cùng trang này, chỉnh luôn **Ngưỡng cảnh báo** cho đúng loại cây trồng của bạn
-(pH, EC tính bằng **µS/cm**, N/P/K tính bằng mg/kg, mức nước cạn tính bằng %).
+(pH, EC tính bằng **µS/cm**, N/P/K tính bằng ppm, mức nước cạn tính bằng %).
 
 ---
 

@@ -199,11 +199,13 @@ export const defaultConfig = {
   //   emptyCm = distance read when the tank is empty (sensor -> bottom)
   //   fullCm  = distance read when the tank is full  (sensor -> full water line)
   // Fill level % = (emptyCm - distance) / (emptyCm - fullCm) * 100, clamped 0..100.
+  // A fertigation rig: two nutrient tanks, a water tank and the mixing tank.
+  // ECHO1..ECHO4 on the STM32 map to these in order; rename in the web UI.
   tanks: {
-    dist1: { name: 'Bồn 1', enabled: true, emptyCm: 100, fullCm: 15 },
-    dist2: { name: 'Bồn 2', enabled: true, emptyCm: 100, fullCm: 15 },
-    dist3: { name: 'Bồn 3', enabled: true, emptyCm: 100, fullCm: 15 },
-    dist4: { name: 'Bồn 4', enabled: true, emptyCm: 100, fullCm: 15 },
+    dist1: { name: 'Bồn Kali', enabled: true, emptyCm: 100, fullCm: 15 },
+    dist2: { name: 'Bồn Đạm', enabled: true, emptyCm: 100, fullCm: 15 },
+    dist3: { name: 'Bồn Nước', enabled: true, emptyCm: 100, fullCm: 15 },
+    dist4: { name: 'Trộn', enabled: true, emptyCm: 100, fullCm: 15 },
   },
 
   // For each device: in AUTO mode turn ON when <metric> is <op> <value>, else OFF.
