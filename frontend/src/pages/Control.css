@@ -1,0 +1,640 @@
+/* ===========================================================================
+   CONTROL page (/control) — operating mode, valve + pump actuators, e-stop.
+   Every selector here is prefixed .ctrl- and this file is imported only by
+   pages/Control.jsx. Shared tokens come from styles.css, which is not ours.
+
+   SIZING MODEL. This runs on a 1024x600 touch panel first and a 1920x1080
+   monitor second, so nothing here ever reflows to fewer columns above 820px:
+   the mode pair stays 2-up, VAN stays 4-across, BƠM stays 5-across and the
+   page keeps its two columns. Type, padding, gaps and glyphs shrink instead,
+   through four tiers that mirror the shell's own (base / compact / panel /
+   tight) and fire on EITHER a narrow viewport or a short one — a 1920x600
+   panel is as height-starved as a 1024x600 one.
+
+   COLOUR. No state is carried by colour alone: every rocker prints ON / OFF /
+   --, every locked rocker carries a padlock, and every cell can print a note.
+   All text/background pairs below are measured against WCAG AA (>=4.5:1).
+   =========================================================================== */
+
+.ctrl-grid {
+  --ctrl-navy: #16255e;
+  --ctrl-line: #e7ecf6;
+  --ctrl-teal: #0d97a5;
+  --ctrl-gold: #b8860b;
+  /* Rocker backgrounds. All four carry white 800-weight text, so all four are
+     dark enough for it: #d31c1f 5.3:1, #15803d 5.0:1, #64748b 4.8:1,
+     #a3313a 6.9:1, #3f7a58 5.1:1 against #fff. */
+  --ctrl-off: #d31c1f;
+  --ctrl-on: #15803d;
+  --ctrl-unknown: #64748b;
+  --ctrl-off-locked: #a3313a;
+  --ctrl-on-locked: #3f7a58;
+
+  /* Vertical rhythm — every tier below re-declares these four. */
+  --ctrl-gap: 18px;
+  --ctrl-pad: 18px 22px 20px;
+  --ctrl-glyph-min: 56px;
+  --ctrl-glyph-max: 150px;
+  --ctrl-sw-h: 38px;
+
+  display: grid;
+  grid-template-columns: minmax(0, 41fr) minmax(0, 59fr);
+  gap: var(--ctrl-gap);
+  align-items: stretch;
+}
+
+/* In the design the panels reach the bottom of the content area — the cells are
+   full of artwork, not floating in white. The shell's body is already a
+   stretched flex item, so turning it into a column here (and ONLY here: the
+   `:has` scopes the rule to the page that ships `.ctrl-grid`) lets the grid
+   claim the leftover height. `min-height: min-content` is the floor: the grid
+   may give height back when the inhibit banner appears above it, but never
+   below what its own cells need. The shell's footer is a sibling of the body,
+   so nothing about the sticky footer changes, and a browser without `:has`
+   simply drops the rule and gets the old, slightly short, layout. */
+.pageshell-body:has(> .ctrl-grid) { display: flex; flex-direction: column; }
+.pageshell-body > .ctrl-grid { flex: 1 1 auto; min-height: min-content; }
+
+.ctrl-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ctrl-gap);
+  min-width: 0;
+}
+
+/* The two columns are the same height, so whichever device panel is in each
+   column absorbs the slack — that keeps the valve grid, the pump grid and the
+   e-stop bar all landing on the same baselines as the panel drawing. */
+.ctrl-panel-grow { flex: 1 1 auto; }
+
+.ctrl-error {
+  margin: 0 0 12px;
+  padding: 9px 14px;
+  border: 1px solid #f6bcbc;
+  border-left: 5px solid var(--red);
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+/* ---- Emergency-stop inhibit banner ---------------------------------------
+   Printed above both columns while the latch is closed. The device list can
+   still legitimately report ON for a few seconds (the relay board applies the
+   queued OFFs on its next poll), so the page states the inhibit itself rather
+   than trusting the cells to imply it. */
+.ctrl-inhibit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 8px 14px;
+  border: 1px solid #f2a9ab;
+  border-left: 6px solid var(--red);
+  border-radius: 10px;
+  background: #ffe4e6;
+  color: #8f1414; /* 7.7:1 on #ffe4e6 */
+}
+
+.ctrl-inhibit-icon { line-height: 0; color: var(--red); flex-shrink: 0; }
+.ctrl-inhibit-icon svg { width: 22px; height: 22px; }
+.ctrl-inhibit strong { font-size: 14px; font-weight: 800; letter-spacing: 0.8px; }
+.ctrl-inhibit > span:last-child { font-size: 12.5px; font-weight: 600; }
+
+/* ---- Panel ---------------------------------------------------------------- */
+.ctrl-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid #eaeff7;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--ctrl-pad);
+  min-width: 0;
+}
+
+/* The heading rule is exactly as wide as the icon + title, as on the panel
+   drawing, so it is drawn by an inline-sized inner box rather than the card. */
+.ctrl-head { display: flex; margin-bottom: var(--ctrl-head-gap, 16px); }
+
+.ctrl-head-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 var(--ctrl-head-tail, 34px) 8px 0;
+  border-bottom: 3px solid var(--blue);
+}
+
+.ctrl-head-icon { line-height: 0; color: var(--ctrl-navy); flex-shrink: 0; }
+.ctrl-head-icon svg { width: var(--ctrl-head-icon, 26px); height: var(--ctrl-head-icon, 26px); }
+
+.ctrl-head-inner h2 {
+  margin: 0;
+  font-size: var(--ctrl-head-size, 18px);
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--ctrl-navy);
+  white-space: nowrap;
+}
+
+/* ---- Operating mode ------------------------------------------------------- */
+.ctrl-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--ctrl-tile-gap, 16px);
+}
+
+.ctrl-mode {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ctrl-tile-inner, 12px);
+  padding: var(--ctrl-tile-pad, 22px 14px 18px);
+  border: 1.5px solid var(--ctrl-line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ctrl-navy);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ctrl-mode:hover:not(:disabled) { border-color: #bcccf0; background: #fafbff; }
+.ctrl-mode:active:not(:disabled) { transform: translateY(1px); }
+
+.ctrl-mode.is-on {
+  border-color: var(--blue);
+  background: #f4f7ff;
+  box-shadow: inset 0 0 0 1px var(--blue);
+}
+
+/* Unavailable is drawn with an explicit muted palette, never with opacity:
+   #5b667f on #f4f6fb is 5.3:1, an opacity fade is about 2.7:1. */
+.ctrl-mode:disabled {
+  cursor: not-allowed;
+  color: #5b667f;
+  background: #f4f6fb;
+  border-color: #dbe2ee;
+  box-shadow: none;
+}
+
+.ctrl-mode:disabled .ctrl-mode-glyph { color: #5b667f; }
+.ctrl-mode:disabled .ctrl-mode-radio { border-color: #9aa6bd; }
+
+.ctrl-mode.is-busy { border-color: var(--blue); animation: ctrl-busy 1s ease-in-out infinite; }
+
+@keyframes ctrl-busy {
+  50% { box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.16); }
+}
+
+.ctrl-mode-glyph { line-height: 0; color: var(--ctrl-navy); }
+.ctrl-mode-glyph svg {
+  width: var(--ctrl-tile-glyph, 72px);
+  height: var(--ctrl-tile-glyph, 72px);
+}
+.ctrl-mode.is-on .ctrl-mode-glyph { color: var(--blue); }
+
+.ctrl-mode-label {
+  font-size: var(--ctrl-tile-label, 18px);
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+/* Radio dot in the top-right corner of the tile. */
+.ctrl-mode-radio {
+  position: absolute;
+  top: var(--ctrl-radio-inset, 12px);
+  right: var(--ctrl-radio-inset, 12px);
+  width: var(--ctrl-radio, 22px);
+  height: var(--ctrl-radio, 22px);
+  border: 2px solid #8b98b1;
+  border-radius: 50%;
+  background: var(--panel);
+  transition: border-color 0.15s ease;
+}
+
+.ctrl-mode.is-on .ctrl-mode-radio { border-color: var(--blue); }
+
+.ctrl-mode.is-on .ctrl-mode-radio::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--blue);
+}
+
+/* ---- Device grids ---------------------------------------------------------
+   4 valves and 5 pumps, one row each, at every width down to 820px. */
+.ctrl-devices { display: grid; gap: var(--ctrl-cell-gap, 12px); flex: 1 1 auto; }
+.ctrl-devices-van { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ctrl-devices-pump { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+.ctrl-dev {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ctrl-cell-inner, 10px);
+  padding: var(--ctrl-cell-pad, 12px 6px);
+  border: 1.5px solid var(--ctrl-line);
+  border-radius: 12px;
+  background: var(--panel);
+  min-width: 0;
+}
+
+.ctrl-dev-name {
+  font-size: var(--ctrl-cell-name, 13px);
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--ctrl-navy);
+  white-space: nowrap;
+}
+
+/* The glyph box takes every pixel the cell has left over, so the artwork fills
+   the cell the way it does in the design instead of floating in a dead band —
+   and the switch stays pinned to the bottom edge when a note appears. */
+.ctrl-dev-icon {
+  line-height: 0;
+  flex: 1 1 auto;
+  min-height: var(--ctrl-glyph-min);
+  width: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.ctrl-dev-icon svg {
+  stroke-width: 1.9;
+  width: auto;
+  height: 100%;
+  max-height: var(--ctrl-glyph-max);
+  max-width: min(94%, var(--ctrl-glyph-max));
+}
+
+.ctrl-dev-van .ctrl-dev-icon { color: var(--ctrl-gold); }
+.ctrl-dev-pump .ctrl-dev-icon { color: var(--ctrl-teal); }
+
+/* A live output earns a tinted cell so the room can read it from a distance;
+   the rocker's own "ON" is the non-colour half of the cue. */
+.ctrl-dev.is-on { border-color: #7fc79b; background: #f2fbf5; }
+
+/* While the latch is closed nothing here is a healthy running output. A cell
+   that still reads ON has NOT been cut yet, so it is drawn as an alarm, and
+   the rest are drawn de-energised. */
+.ctrl-dev.is-inhibited .ctrl-dev-icon { color: #64748b; }
+.ctrl-dev.is-cutting {
+  border-color: var(--red);
+  background: #fff1f2;
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.35);
+}
+.ctrl-dev.is-cutting .ctrl-dev-icon { color: #b91c1c; }
+
+.ctrl-dev-note {
+  min-height: 0; /* an empty caption costs no height on a 600px panel */
+  max-width: 100%;
+  font-size: var(--ctrl-cell-note, 11px);
+  line-height: 1.25;
+  font-weight: 700;
+  color: var(--muted); /* 4.8:1 on #fff */
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.ctrl-dev-note.is-bad { color: #b3261e; } /* 5.9:1 on #fff */
+
+/* No caption, no row — and no flex gap above it either. */
+.ctrl-dev-note:empty { display: none; }
+
+/* ---- Rocker switch --------------------------------------------------------
+   Fluid width: at 1024px a VAN cell is only ~83px wide, so a fixed 74-84px
+   track crowded the cell border. Knob travel and label gutter are percentages
+   of the track, so the rocker is proportionate at any cell width. */
+.ctrl-switch {
+  position: relative;
+  width: min(84px, 100%);
+  min-width: 44px;
+  height: var(--ctrl-sw-h);
+  flex-shrink: 0;
+  padding: 0;
+  border: 1.5px solid #b9c2d4;
+  border-radius: 10px;
+  background: var(--ctrl-off);
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.ctrl-switch.is-on { background: var(--ctrl-on); }
+.ctrl-switch.is-unknown { background: var(--ctrl-unknown); }
+
+.ctrl-switch-label {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(42% + 6px);
+  right: 4px;
+  display: grid;
+  place-items: center;
+  font-size: var(--ctrl-sw-label, 12px);
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  color: #fff;
+  transition: left 0.18s ease, right 0.18s ease;
+}
+
+.ctrl-switch.is-on .ctrl-switch-label { left: 4px; right: calc(42% + 6px); }
+
+.ctrl-switch-knob {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: 42%;
+  display: grid;
+  place-items: center;
+  border: 1px solid #dbe1ee;
+  border-radius: 7px;
+  background: #eff3ff;
+  color: #334155;
+  box-shadow: 0 1px 2px rgba(16, 35, 63, 0.18);
+  transition: left 0.18s ease;
+}
+
+/* 100% is the track's padding box, so this lands the knob 3px from the far
+   edge whatever the track ended up being. */
+.ctrl-switch.is-on .ctrl-switch-knob { left: calc(58% - 3px); }
+
+.ctrl-switch-knob svg { width: min(62%, 15px); height: auto; }
+
+/* Locked is a padlock in the knob plus a desaturated-but-still-legible track,
+   never an opacity fade: AUTO is the resting mode, so the faded rocker was the
+   page's normal appearance at ~2.2:1. */
+.ctrl-switch:disabled { cursor: not-allowed; }
+.ctrl-switch:disabled.is-off { background: var(--ctrl-off-locked); }
+.ctrl-switch:disabled.is-on { background: var(--ctrl-on-locked); }
+.ctrl-switch:disabled .ctrl-switch-knob { background: #e5e9f3; color: #475569; }
+
+/* Pending: the switch already shows where it is going, ringed and breathing
+   until the confirming 'devices' broadcast arrives (or the 10s timeout). The
+   ring is on the outside, so the label keeps its full contrast. */
+.ctrl-switch.is-pending {
+  border-color: var(--blue);
+  animation: ctrl-breathe 1.1s ease-in-out infinite;
+}
+
+@keyframes ctrl-breathe {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.5); }
+  50% { box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.18); }
+}
+
+/* ---- Explanatory line under a panel --------------------------------------- */
+.ctrl-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: var(--ctrl-note-gap, 12px) 0 0;
+  font-size: var(--ctrl-note-size, 12.5px);
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.ctrl-note-icon { line-height: 0; flex-shrink: 0; }
+.ctrl-note-icon svg { width: 15px; height: 15px; margin-top: 1px; }
+
+.ctrl-note.is-lock { color: var(--amber); } /* 5.0:1 on #fff */
+.ctrl-note.is-bad { color: var(--red); } /* 4.8:1 on #fff */
+
+/* ---- Emergency stop ------------------------------------------------------- */
+.ctrl-estop-wrap { display: flex; flex-direction: column; }
+
+.ctrl-estop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ctrl-estop-gap, 16px);
+  width: 100%;
+  min-height: var(--ctrl-estop-h, 68px);
+  padding: var(--ctrl-estop-pad, 10px 20px);
+  /* The design's bar is borderless pale pink; the strong border is kept for
+     the two states where it means something. */
+  border: 1px solid #f2b8ba;
+  border-radius: 12px;
+  background: #ffdbdd;
+  color: #b91c1c; /* 5.1:1 on #ffdbdd */
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.ctrl-estop:hover:not(:disabled) { background: #ffcdd0; border-color: var(--red); }
+.ctrl-estop:active:not(:disabled) { transform: translateY(1px); }
+.ctrl-estop:disabled { cursor: not-allowed; background: #f6eaea; border-color: #e2cfcf; color: #8a4a4a; }
+
+.ctrl-estop-icon { line-height: 0; flex-shrink: 0; color: var(--red); }
+.ctrl-estop-icon svg { width: var(--ctrl-estop-icon, 38px); height: var(--ctrl-estop-icon, 38px); }
+
+.ctrl-estop-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  min-width: 0;
+}
+
+.ctrl-estop-text strong {
+  font-size: var(--ctrl-estop-label, 24px);
+  font-weight: 800;
+  letter-spacing: 1.1px;
+}
+
+.ctrl-estop-text em {
+  font-style: normal;
+  font-size: var(--ctrl-estop-sub, 12px);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+/* Armed: first press landed, one more commits. */
+.ctrl-estop.is-armed {
+  background: #fff1f2;
+  border: 2px solid var(--red);
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.16);
+  animation: ctrl-armed 0.9s ease-in-out infinite;
+}
+
+@keyframes ctrl-armed {
+  50% { box-shadow: 0 0 0 9px rgba(220, 38, 38, 0.08); }
+}
+
+/* Engaged: solid red, and every output on the page is locked out. */
+.ctrl-estop.is-engaged {
+  background: var(--red);
+  border: 2px solid #7f1d1d;
+  color: #fff; /* 4.8:1 on #dc2626 */
+  animation: none;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.32);
+}
+
+/* The solid triangle knocks its bar and dot out in white, so on the red bar it
+   needs a white ground of its own or it flattens into a plain shape. */
+.ctrl-estop.is-engaged .ctrl-estop-icon {
+  background: #fff;
+  border-radius: 50%;
+  padding: 4px;
+  color: #b91c1c;
+}
+
+.ctrl-estop.is-engaged:hover:not(:disabled) { background: #b91c1c; border-color: #7f1d1d; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ctrl-switch,
+  .ctrl-switch-knob,
+  .ctrl-switch-label,
+  .ctrl-estop,
+  .ctrl-mode { transition: none; }
+  .ctrl-switch.is-pending,
+  .ctrl-mode.is-busy,
+  .ctrl-estop.is-armed { animation: none; }
+  .ctrl-switch.is-pending { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.45); }
+}
+
+/* ===========================================================================
+   TIER 2 — compact.  <=1440px wide OR <=900px tall (1280x800, 1366x768).
+   =========================================================================== */
+@media (max-width: 1440px), (max-height: 900px) {
+  .ctrl-grid {
+    --ctrl-gap: 13px;
+    --ctrl-pad: 13px 15px 15px;
+    --ctrl-glyph-min: 44px;
+    --ctrl-glyph-max: 120px;
+    --ctrl-sw-h: 36px;
+    --ctrl-head-gap: 11px;
+    --ctrl-head-tail: 24px;
+    --ctrl-head-icon: 23px;
+    --ctrl-head-size: 16px;
+    --ctrl-tile-gap: 11px;
+    --ctrl-tile-pad: 13px 10px 12px;
+    --ctrl-tile-inner: 8px;
+    --ctrl-tile-glyph: 56px;
+    --ctrl-tile-label: 16px;
+    --ctrl-radio: 18px;
+    --ctrl-radio-inset: 9px;
+    --ctrl-cell-gap: 9px;
+    --ctrl-cell-pad: 9px 5px 10px;
+    --ctrl-cell-inner: 8px;
+    --ctrl-cell-name: 12px;
+    --ctrl-cell-note: 10.5px;
+    --ctrl-sw-label: 11.5px;
+    --ctrl-note-gap: 9px;
+    --ctrl-note-size: 12px;
+    --ctrl-estop-h: 58px;
+    --ctrl-estop-pad: 8px 16px;
+    --ctrl-estop-gap: 13px;
+    --ctrl-estop-icon: 32px;
+    --ctrl-estop-label: 20px;
+    --ctrl-estop-sub: 11.5px;
+  }
+  .ctrl-head-inner { padding-bottom: 6px; border-bottom-width: 2px; }
+  .ctrl-inhibit { margin-bottom: 9px; padding: 6px 12px; }
+  .ctrl-error { margin-bottom: 9px; }
+}
+
+/* ===========================================================================
+   TIER 3 — panel.  <=1100px wide OR <=700px tall.  This is the 1024x600 HMI,
+   and also a 1920x600 wall strip. Still 2 columns, 4 valves, 5 pumps.
+   =========================================================================== */
+@media (max-width: 1100px), (max-height: 700px) {
+  .ctrl-grid {
+    --ctrl-gap: 9px;
+    --ctrl-pad: 9px 11px 11px;
+    --ctrl-glyph-min: 22px;
+    --ctrl-glyph-max: 96px;
+    --ctrl-sw-h: 32px;
+    --ctrl-head-gap: 7px;
+    --ctrl-head-tail: 14px;
+    --ctrl-head-icon: 19px;
+    --ctrl-head-size: 13.5px;
+    --ctrl-tile-gap: 8px;
+    --ctrl-tile-pad: 8px 6px 8px;
+    --ctrl-tile-inner: 5px;
+    --ctrl-tile-glyph: 46px;
+    --ctrl-tile-label: 13.5px;
+    --ctrl-radio: 15px;
+    --ctrl-radio-inset: 6px;
+    --ctrl-cell-gap: 6px;
+    --ctrl-cell-pad: 6px 3px 7px;
+    --ctrl-cell-inner: 5px;
+    --ctrl-cell-name: 11px;
+    --ctrl-cell-note: 9.5px;
+    --ctrl-sw-label: 10.5px;
+    --ctrl-note-gap: 6px;
+    --ctrl-note-size: 11.5px;
+    --ctrl-estop-h: 44px;
+    --ctrl-estop-pad: 6px 12px;
+    --ctrl-estop-gap: 10px;
+    --ctrl-estop-icon: 26px;
+    --ctrl-estop-label: 16px;
+    --ctrl-estop-sub: 10.5px;
+  }
+  .ctrl-head-inner { gap: 8px; padding-bottom: 5px; }
+  .ctrl-inhibit { margin-bottom: 4px; padding: 4px 10px; gap: 8px; }
+  .ctrl-inhibit-icon svg { width: 18px; height: 18px; }
+  .ctrl-inhibit strong { font-size: 12.5px; }
+  .ctrl-inhibit > span:last-child { font-size: 11.5px; }
+  /* Same headroom as .ctrl-inhibit: a banner above the grid must not push the
+     e-stop off a 600px panel. */
+  .ctrl-error { margin-bottom: 4px; padding: 5px 11px; font-size: 12.5px; }
+  .ctrl-note-icon svg { width: 13px; height: 13px; }
+  .ctrl-switch-knob svg { width: min(62%, 13px); }
+}
+
+/* ===========================================================================
+   TIER 4 — tight.  <=860px wide OR <=560px tall. Last stop before stacking.
+   =========================================================================== */
+@media (max-width: 860px), (max-height: 560px) {
+  .ctrl-grid {
+    --ctrl-gap: 5px;
+    --ctrl-pad: 7px 9px 9px;
+    --ctrl-glyph-min: 18px;
+    --ctrl-glyph-max: 56px;
+    --ctrl-sw-h: 28px;
+    --ctrl-head-gap: 5px;
+    --ctrl-head-tail: 10px;
+    --ctrl-head-icon: 16px;
+    --ctrl-head-size: 12px;
+    --ctrl-tile-pad: 6px 5px 6px;
+    --ctrl-tile-glyph: 30px;
+    --ctrl-tile-label: 12px;
+    --ctrl-cell-pad: 5px 3px 6px;
+    --ctrl-cell-name: 10px;
+    --ctrl-cell-note: 9px;
+    --ctrl-sw-label: 9.5px;
+    --ctrl-estop-h: 38px;
+    --ctrl-estop-icon: 22px;
+    --ctrl-estop-label: 14px;
+    --ctrl-estop-sub: 10px;
+  }
+}
+
+/* ===========================================================================
+   Stacking. The columns are allowed to stack below 820px, but holding them
+   to 700px is what lets an 800x480 panel show the e-stop without scrolling —
+   stacking doubles the page's height. 700px is where a VAN cell finally gets
+   too narrow for its rocker.
+   =========================================================================== */
+@media (max-width: 700px) {
+  /* Only the page's two columns stack; the device rows keep 4-up and 5-up. */
+  .ctrl-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 620px) {
+  .ctrl-devices-pump { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ctrl-devices-van { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ctrl-modes { grid-template-columns: 1fr; }
+  .ctrl-estop { flex-direction: column; gap: 6px; }
+}

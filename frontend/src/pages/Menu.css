@@ -1,0 +1,347 @@
+/* MENU page — owned by the Menu/About/ChangePassword agent.
+   Every class here is prefixed `menu-`; nothing leaks into the shared sheet. */
+
+/* `.pageshell-body` is the flex child that soaks up the leftover panel height,
+   but a six-tile grid is shorter than a 1080p body, so without this the whole
+   MENU hugs the title bar and leaves a dead band above the fold. Scoped by the
+   child selector, so it only ever applies while MENU is mounted. */
+.pageshell-body:has(> .menu-grid) {
+  display: flex;
+  align-items: center;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+/* One card = one touch target. Rendered as <a> for routes, <button> for LOGOUT
+   and <span> when the role cannot use it, so the button resets (font,
+   background, text-align) are mandatory. */
+.menu-card {
+  --menu-accent: #1d4ed8;
+  --menu-tint: #eff4ff;
+
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 26px;
+  width: 100%;
+  padding: 22px 26px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 0.14s ease,
+    box-shadow 0.14s ease,
+    border-color 0.14s ease;
+}
+
+/* CHANGE PASSWORD + LOGOUT: the account pair, red in the panel design. */
+.menu-card-danger {
+  --menu-accent: var(--red);
+  --menu-tint: #fef2f2;
+}
+
+.menu-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--menu-accent);
+  box-shadow:
+    0 2px 4px rgba(16, 35, 63, 0.06),
+    0 14px 30px rgba(16, 35, 63, 0.12);
+}
+.menu-card:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow);
+}
+.menu-card:focus-visible {
+  outline: 3px solid var(--menu-accent);
+  outline-offset: 3px;
+}
+
+/* Tinted rounded square holding the glyph. The design's glyph fills ~70% of a
+   tile that is ~25% of the card width; keep both ratios as the tiers shrink. */
+.menu-card-icon {
+  display: grid;
+  place-items: center;
+  width: 140px;
+  height: 130px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: var(--menu-tint);
+  color: var(--menu-accent);
+  line-height: 0;
+}
+
+.menu-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.menu-card-title {
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--menu-accent);
+}
+
+/* The design's short accent bar between the title and the body copy. It takes
+   the card's accent, so it is blue on the four navigation cards and red on the
+   account pair, exactly as in 4.jpg. */
+.menu-card-rule {
+  width: 46px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--menu-accent);
+  flex: none;
+}
+
+/* Deep navy, not grey — the design keeps this navy even on the two red cards,
+   where only the title, rule, chevron and glyph go red.
+   The line breaks are authored (see ITEMS in Menu.jsx), so there is no
+   `max-width` guessing here; `min-height` reserves two lines so the short
+   LOGOUT / CHANGE PASSWORD copy still yields a card the same height as its
+   neighbour. */
+.menu-card-desc {
+  font-size: 16px;
+  line-height: 1.5;
+  color: #1e3a8a;
+  min-height: 3em;
+}
+
+/* One authored line each. Still free to wrap internally if a narrow panel or a
+   larger system font makes a line too long for the card. */
+.menu-card-desc-line {
+  display: block;
+}
+
+.menu-card-chevron {
+  color: var(--menu-accent);
+  line-height: 0;
+}
+
+/* ---- Cards the current role may not press ----
+   The design is a fixed 3x2 grid. Removing a tile would move every tile after
+   it, so an ungranted screen is shown greyed and inert instead. */
+.menu-card-locked {
+  --menu-accent: #475569;
+  --menu-tint: #f1f5f9;
+
+  cursor: not-allowed;
+  box-shadow: none;
+  background: #fcfdfe;
+}
+.menu-card-locked:hover {
+  transform: none;
+  border-color: var(--border);
+  box-shadow: none;
+}
+.menu-card-locked .menu-card-desc {
+  color: #475569;
+}
+
+/* Replaces the chevron: glyph + words, never colour alone. */
+.menu-card-lockflag {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 78px;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+}
+.menu-card-lockflag svg {
+  flex: none;
+}
+
+/* ---- Responsive ----
+   The design's two columns survive every panel size the HMI ships on; type,
+   padding, glyphs and gaps shrink instead. Only below 820px does it stack.
+   Tiers mirror the shell's (styles.css): <=1440w|<=900h, <=1100w|<=700h. */
+@media (max-width: 1440px), (max-height: 900px) {
+  .menu-grid {
+    gap: 18px;
+    max-width: 1120px;
+  }
+  .menu-card {
+    gap: 20px;
+    padding: 18px 20px;
+    border-radius: 16px;
+  }
+  .menu-card-icon {
+    width: 112px;
+    height: 104px;
+  }
+  .menu-card-icon svg {
+    width: 76px;
+    height: 76px;
+  }
+  .menu-card-title {
+    font-size: 22px;
+  }
+  .menu-card-rule {
+    width: 40px;
+  }
+  .menu-card-desc {
+    font-size: 14.5px;
+  }
+  .menu-card-chevron svg {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+/* Touch-panel tier — 1024x600 lands here. Still two columns. */
+@media (max-width: 1100px), (max-height: 700px) {
+  .menu-grid {
+    gap: 12px;
+    max-width: none;
+  }
+  .menu-card {
+    gap: 14px;
+    padding: 13px 16px;
+    border-radius: 13px;
+  }
+  .menu-card-icon {
+    width: 92px;
+    height: 86px;
+    border-radius: 8px;
+  }
+  .menu-card-icon svg {
+    width: 62px;
+    height: 62px;
+  }
+  .menu-card-text {
+    gap: 6px;
+  }
+  .menu-card-title {
+    font-size: 18px;
+    letter-spacing: 0.4px;
+  }
+  .menu-card-rule {
+    width: 32px;
+    height: 2.5px;
+  }
+  .menu-card-desc {
+    font-size: 13px;
+    line-height: 1.45;
+    min-height: 2.9em;
+  }
+  .menu-card-chevron svg {
+    width: 24px;
+    height: 24px;
+  }
+  .menu-card-lockflag {
+    width: 62px;
+    font-size: 10.5px;
+    gap: 2px;
+  }
+  .menu-card-lockflag svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+/* Small panel — 800x480 lands here. STILL two columns: six cards stacked in a
+   single column need ~860px of height and that panel has 480, so collapsing
+   here would push half the menu below the fold on the screen least able to
+   scroll. Everything shrinks instead. */
+@media (max-width: 860px), (max-height: 560px) {
+  .menu-grid {
+    gap: 10px;
+  }
+  .menu-card {
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 11px;
+  }
+  .menu-card-icon {
+    width: 74px;
+    height: 70px;
+    border-radius: 7px;
+  }
+  .menu-card-icon svg {
+    width: 50px;
+    height: 50px;
+  }
+  .menu-card-text {
+    gap: 5px;
+  }
+  .menu-card-title {
+    font-size: 16px;
+    letter-spacing: 0.3px;
+  }
+  .menu-card-rule {
+    width: 28px;
+    height: 2px;
+  }
+  .menu-card-desc {
+    font-size: 12px;
+    line-height: 1.4;
+    min-height: 2.8em;
+  }
+  .menu-card-chevron svg {
+    width: 20px;
+    height: 20px;
+  }
+  .menu-card-lockflag {
+    width: 54px;
+    font-size: 9.5px;
+  }
+  .menu-card-lockflag svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* Genuinely narrow: the only band where the design's columns may collapse.
+   Below this a two-up card cannot hold its icon tile and two lines of copy. */
+@media (max-width: 660px) {
+  .menu-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    max-width: 680px;
+  }
+}
+
+@media (max-width: 620px) {
+  .menu-card {
+    gap: 14px;
+    padding: 12px 14px;
+    border-radius: 12px;
+  }
+  .menu-card-icon {
+    width: 72px;
+    height: 68px;
+    border-radius: 7px;
+  }
+  .menu-card-icon svg {
+    width: 48px;
+    height: 48px;
+  }
+  .menu-card-title {
+    font-size: 17px;
+    letter-spacing: 0.3px;
+  }
+  .menu-card-desc {
+    font-size: 12.5px;
+    min-height: 0;
+  }
+}

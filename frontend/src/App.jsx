@@ -1,33 +1,56 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth, can } from './auth/AuthContext.jsx';
+import { UserBar } from './components/UserBar.jsx';
 import { Login } from './pages/Login.jsx';
-import { Layout } from './components/Layout.jsx';
+import { Menu } from './pages/Menu.jsx';
 import { Dashboard } from './pages/Dashboard.jsx';
+import { Control } from './pages/Control.jsx';
 import { Settings } from './pages/Settings.jsx';
+import { About } from './pages/About.jsx';
+import { ChangePassword } from './pages/ChangePassword.jsx';
 import { Users } from './pages/Users.jsx';
 
+// Every screen draws its own chrome through PageShell, so the app shell is just
+// the centred `.content` column the Foundation agent's stylesheet expects, plus
+// the user/logout line. There is no sidebar in this design.
 export default function App() {
   const { user, loading } = useAuth();
 
-  if (loading)
-    return <div className="full-center">Đang tải…</div>;
+  if (loading) return <div className="full-center">Đang tải…</div>;
 
   if (!user) return <Login />;
 
+  // A screen the role can't use is bounced to MENU rather than rendered empty:
+  // the server would refuse the calls anyway, and MENU already hides the card.
+  // `replace` keeps the blocked path out of history so Back doesn't ping-pong.
+  const guard = (allowed, element) =>
+    allowed ? element : <Navigate to="/menu" replace />;
+
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route index element={<Dashboard />} />
-        <Route
-          path="settings"
-          element={can.config(user.role) ? <Settings /> : <Navigate to="/" />}
-        />
-        <Route
-          path="users"
-          element={can.manageUsers(user.role) ? <Users /> : <Navigate to="/" />}
-        />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Route>
-    </Routes>
+    <div className="layout">
+      <div className="content app-shell">
+        <UserBar />
+        <Routes>
+          <Route path="/" element={<Navigate to="/menu" replace />} />
+          <Route path="/menu" element={<Menu />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route
+            path="/control"
+            element={guard(can.control(user.role), <Control />)}
+          />
+          <Route
+            path="/settings"
+            element={guard(can.config(user.role), <Settings />)}
+          />
+          <Route path="/about" element={<About />} />
+          <Route path="/change-password" element={<ChangePassword />} />
+          <Route
+            path="/users"
+            element={guard(can.manageUsers(user.role), <Users />)}
+          />
+          <Route path="*" element={<Navigate to="/menu" replace />} />
+        </Routes>
+      </div>
+    </div>
   );
 }

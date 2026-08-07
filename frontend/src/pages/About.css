@@ -1,0 +1,169 @@
+/* ABOUT page — owned by the Menu/About/ChangePassword agent.
+   The design puts this content straight onto the watermarked ground with no
+   card, so this file is almost entirely typography. All classes are `about-`. */
+
+/* The design distributes this block down the panel (quote at 35% of panel
+   height, member 7 at 90%); left alone the wrap collapses to its content height
+   at the top of `.pageshell-body` and leaves a ~300px dead band above QUAY LẠI
+   on a 1080p screen. Scoped by the child selector so it only bites on ABOUT.
+   `safe center` keeps the top of the block reachable if it ever outgrows the
+   body; browsers without it fall back to the plain `center` above. */
+.pageshell-body:has(> .about-wrap) {
+  display: flex;
+  align-items: center;
+  align-items: safe center;
+}
+
+.about-wrap {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 4px 8px 8px;
+  text-align: center;
+}
+
+/* Sizes are height-relative: they hit the design's proportions on a tall panel
+   and self-compact on a 600px or 480px one, which is what keeps QUAY LẠI on
+   screen without a second set of font-size overrides. */
+.about-quote {
+  margin: 0;
+  font-size: clamp(15px, 3.1vh, 23px);
+  font-weight: 600;
+  line-height: 1.75;
+  color: var(--text);
+}
+
+/* Two authored lines, exactly as they break in the panel design. Each line is
+   still free to wrap internally on a narrow screen. */
+.about-quote-line {
+  display: block;
+}
+
+.about-advisor {
+  margin: 26px 0 0;
+  font-size: clamp(15px, 3.2vh, 24px);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Centred block: name on the left, student ID on the right. `counter` supplies
+   the "1." prefix so the numbering can sit inside the name column and stay
+   aligned with the name, not the list edge. */
+.about-members {
+  list-style: none;
+  counter-reset: about-member;
+  max-width: 490px;
+  margin: 30px auto 0;
+  padding: 0;
+  display: grid;
+  gap: 13px;
+  text-align: left;
+}
+
+.about-member {
+  counter-increment: about-member;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 18px;
+  font-size: clamp(14px, 2.8vh, 21px);
+  line-height: 1.4;
+}
+
+/* No tonal step between the ordinal and the name — the design draws both in the
+   same navy, so the counter simply inherits. */
+.about-member-name::before {
+  content: counter(about-member) '. ';
+  font-variant-numeric: tabular-nums;
+}
+
+.about-member-id {
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- Responsive ----
+   Tall screens: open the rhythm out so the block spans the panel the way the
+   design does (quote high, member 7 low) instead of sitting as a tight brick in
+   the middle of a 1080p screen. */
+@media (min-height: 900px) {
+  .about-quote {
+    line-height: 1.9;
+  }
+  .about-advisor {
+    margin-top: 38px;
+  }
+  .about-members {
+    margin-top: 42px;
+    gap: 20px;
+  }
+}
+
+/* Short panels: 1024x600 and 800x480 are the two the HMI ships on and both need
+   the vertical rhythm pulled in, not the type re-specified. */
+@media (max-height: 780px) {
+  .about-quote {
+    line-height: 1.55;
+  }
+  .about-advisor {
+    margin-top: 16px;
+  }
+  .about-members {
+    margin-top: 16px;
+    gap: 8px;
+  }
+}
+
+@media (max-height: 560px) {
+  .about-quote {
+    line-height: 1.45;
+  }
+  .about-advisor {
+    margin-top: 12px;
+  }
+  .about-members {
+    margin-top: 12px;
+    gap: 6px;
+  }
+  .about-member {
+    line-height: 1.3;
+  }
+}
+
+@media (max-width: 900px) {
+  .about-quote {
+    font-size: clamp(15px, 2.8vh, 19px);
+  }
+  .about-advisor {
+    font-size: clamp(15px, 2.9vh, 19px);
+  }
+}
+
+@media (max-width: 620px) {
+  .about-quote {
+    font-size: clamp(14px, 2.6vh, 17px);
+    line-height: 1.6;
+  }
+  .about-advisor {
+    margin-top: 16px;
+    font-size: clamp(14px, 2.6vh, 17px);
+  }
+  /* One column: the ID drops under the name and turns into a caption. */
+  .about-members {
+    max-width: 340px;
+    gap: 10px;
+  }
+  .about-member {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    font-size: clamp(14px, 2.5vh, 16px);
+  }
+  .about-member-id {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    padding-left: 1.5em;
+  }
+}

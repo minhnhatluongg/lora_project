@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -13,7 +13,9 @@ import {
   METRICS,
   SOIL_KEYS,
   NPK_KEYS,
+  AIR_KEYS,
   LEVEL_KEYS,
+  displayValue,
   fmtShortTime,
   fmtDateTime,
 } from '../metrics.js';
@@ -22,8 +24,16 @@ import { RANGES } from '../useFarm.js';
 const TABS = [
   { id: 'soil', label: 'Môi trường đất', keys: SOIL_KEYS, mode: 'small-multiples' },
   { id: 'npk', label: 'Dinh dưỡng NPK', keys: NPK_KEYS, mode: 'combined', unit: 'ppm' },
+  // °C, %RH and % don't share a scale, so these get one plot each.
+  { id: 'air', label: 'Không khí & mưa', keys: [...AIR_KEYS, 'rain'], mode: 'small-multiples' },
   { id: 'water', label: 'Mực nước bồn', keys: LEVEL_KEYS, mode: 'combined', unit: '%', domain: [0, 100] },
 ];
+
+// Every key this component can plot. Rows arrive in STORAGE units (EC in µS/cm)
+// but the axes are titled from METRICS[key].unit, which is what the panel shows
+// (EC in mS/cm) — so the numbers have to be converted before they reach recharts
+// or the EC axis reads ~1480 under a "mS/cm" label.
+const PLOT_KEYS = [...new Set(TABS.flatMap((t) => t.keys))];
 
 // Recessive grid/axis on the white chart surface — the data should carry the ink.
 const GRID = '#e6ebf2';
@@ -36,13 +46,18 @@ function ChartTooltip({ active, payload, label }) {
       <div className="chart-tooltip-time">{fmtDateTime(label)}</div>
       {payload.map((row) => {
         const m = METRICS[row.dataKey];
+        // Values are already in display units here; only the rounding is left.
+        const shown =
+          row.value == null || Number.isNaN(Number(row.value))
+            ? '--'
+            : Number(row.value).toFixed(m?.decimals ?? 1);
         return (
           <div key={row.dataKey} className="chart-tooltip-row">
             <span className="chart-swatch" style={{ background: row.color }} />
             <span className="chart-tooltip-name">{m?.short || row.dataKey}</span>
             <span className="chart-tooltip-value">
-              {row.value == null ? '--' : row.value}
-              {m?.unit ? ` ${m.unit}` : ''}
+              {shown}
+              {shown !== '--' && m?.unit ? ` ${m.unit}` : ''}
             </span>
           </div>
         );
@@ -60,7 +75,14 @@ const axisProps = {
 export function RealtimeCharts({ history, hours, onHoursChange }) {
   const [tab, setTab] = useState('soil');
   const active = TABS.find((t) => t.id === tab);
-  const data = history || [];
+  const data = useMemo(() => {
+    const rows = history || [];
+    return rows.map((row) => {
+      const out = { ...row };
+      for (const key of PLOT_KEYS) out[key] = displayValue(row[key], key);
+      return out;
+    });
+  }, [history]);
   const empty = data.length === 0;
 
   return (

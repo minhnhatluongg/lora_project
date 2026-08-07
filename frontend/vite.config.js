@@ -15,4 +15,19 @@ export default defineConfig({
   // `vite preview` (serving the production build) needs its own proxy config —
   // it does not inherit server.proxy.
   preview: { port: 5173, proxy },
+  build: {
+    rollupOptions: {
+      output: {
+        // Recharts + d3 are over half the bundle and only the DASHBOARD needs
+        // them; MENU and CONTROL are what an operator hits first on a panel that
+        // may be on a slow link. Splitting them out keeps the entry chunk small
+        // and lets the browser cache the vendor code across app deploys.
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+          socket: ['socket.io-client'],
+        },
+      },
+    },
+  },
 });

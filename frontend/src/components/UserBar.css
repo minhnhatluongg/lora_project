@@ -1,0 +1,79 @@
+/* Owned by the integration agent. Everything here is prefixed `userbar-`; the
+   one non-prefixed rule is scoped under `.app-shell` so it cannot leak. */
+
+/* `.content` opens with 18px of empty top padding; the bar sits up inside it
+   rather than pushing the whole page down, so it only costs 18px of height. */
+.userbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  height: 26px;
+  margin-top: -8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.userbar-name {
+  font-weight: 700;
+  color: var(--text);
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userbar-role {
+  background: var(--blue);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+
+.userbar-link,
+.userbar-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 12px 3px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.userbar-link { text-decoration: none; }
+
+.userbar-link:hover {
+  color: var(--blue);
+  border-color: #bfd4ff;
+  background: #f2f6ff;
+}
+
+.userbar-logout:hover {
+  color: var(--red);
+  border-color: #fecaca;
+  background: #fff5f5;
+}
+
+.userbar-link:active,
+.userbar-logout:active { transform: translateY(1px); }
+
+/* PageShell sizes itself to fill the viewport below `.content`'s 18px + 28px of
+   padding. This bar adds 18px of chrome above it (26px tall, 8px of it clawed
+   back from that padding), so the shell has to give the 18px back or every page
+   picks up a scrollbar it doesn't need — on a fixed touch panel that is a
+   permanently visible artefact, not a cosmetic nit. Measured: MENU at 1080p is
+   exactly viewport height with this in place. */
+.app-shell .pageshell { min-height: calc(100vh - 64px); }
+
+@media (max-width: 620px) {
+  .userbar { justify-content: center; }
+  .userbar-name { max-width: 45vw; }
+}

@@ -24,7 +24,13 @@ export function Login() {
   return (
     <div className="login-screen">
       <form className="login-card" onSubmit={submit}>
-        <div className="login-brand">🌿 SMART FARM</div>
+        {/* No emoji anywhere in this design; the login card wears the same
+            brand block PageShell puts on every screen behind it. */}
+        <div className="login-org">
+          <span className="login-org-main">FPT Education</span>
+          <span className="login-org-sub">FPT POLYTECHNIC</span>
+        </div>
+        <div className="login-brand">SMART FARM</div>
         <p className="login-sub">Hệ thống nông nghiệp thông minh dùng LoRa</p>
 
         <label>Tài khoản</label>

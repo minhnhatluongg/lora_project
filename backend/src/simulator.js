@@ -18,6 +18,19 @@ const tanks = [
   { dist: 30, drain: 0.7 },
 ];
 
+// What the relay board currently reads back — 5 pumps + 4 valves. Acks flip
+// these, then we mirror them to /api/devices/state like the real master does.
+const deviceStates = {
+  pump1: 'OFF', pump2: 'OFF', pump3: 'OFF', pump4: 'OFF', pump5: 'OFF',
+  van1: 'OFF', van2: 'OFF', van3: 'OFF', van4: 'OFF',
+};
+
+// Rain board: dry, with a shower every ~40 ticks so the HMI's rain card moves.
+const rainPct = () => {
+  const phase = t % 40;
+  return phase < 8 ? Math.round(25 + 50 * Math.sin((phase / 8) * Math.PI)) : 0;
+};
+
 function stepTanks() {
   return tanks.map((tank, i) => {
     tank.dist += tank.drain;
@@ -39,6 +52,9 @@ async function tick() {
     n: Math.round(jitter(120, 25)),         // mg/kg
     p: Math.round(jitter(60, 12)),
     k: Math.round(jitter(180, 35)),
+    air_temp: Number(jitter(29, 4).toFixed(1)),      // °C, air probe
+    air_humidity: Number(jitter(68, 12).toFixed(1)), // %RH, air probe
+    rain: rainPct(),                                 // 0..100 %
     dist1,
     dist2,
     dist3,
@@ -59,6 +75,13 @@ async function tick() {
       await fetch(`${BASE}/api/commands/pending`, { headers })
     ).json();
     for (const cmd of pending) {
+      // 'system'/RESTART is what the SETTINGS screen queues; a real master
+      // would reboot here. 'mode' is bookkeeping, everything else is a relay.
+      if (cmd.device_id === 'system' && cmd.action === 'RESTART') {
+        console.log('*** master would reboot now (system RESTART) ***');
+      } else if (cmd.device_id in deviceStates) {
+        deviceStates[cmd.device_id] = cmd.action;
+      }
       await fetch(`${BASE}/api/commands/${cmd.id}/ack`, {
         method: 'POST',
         headers,
@@ -66,6 +89,14 @@ async function tick() {
       });
       console.log(`acked command #${cmd.id}: ${cmd.device_id} -> ${cmd.action}`);
     }
+
+    // Report the relay board back, exactly like the master does after a sweep.
+    await fetch(`${BASE}/api/devices/state`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(deviceStates),
+    });
+
     console.log('posted', reading);
   } catch (e) {
     console.error('simulator error:', e.message);

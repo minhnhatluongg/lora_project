@@ -248,6 +248,38 @@ Cùng trang này, chỉnh luôn **Ngưỡng cảnh báo** cho đúng loại cây
 
 ---
 
+## Bước 6b — Những thứ phần mềm đã sẵn sàng mà phần cứng chưa
+
+Giao diện dựng theo bộ thiết kế của nhóm nên có sẵn vài thứ mà node hiện tại
+chưa đáp ứng. Không sao cả — mọi trường đều tùy chọn, thiếu thì hiện `--`:
+
+| Trên màn hình | Cần thêm gì ở phần cứng |
+|---|---|
+| **Độ ẩm không khí**, **Nhiệt độ không khí** | Một cảm biến DHT22 / SHT31 nối vào STM32, rồi thêm `air_temp` + `air_humidity` vào `sendUplink()` |
+| **Cảm biến mưa** | Board cảm biến mưa (analog hoặc digital), thêm `rain` vào `sendUplink()` — gửi 0–100, board digital thì gửi 0 hoặc 100 |
+| **Bơm 2 … Bơm 5** | Đấu thêm 4 relay vào ESP32 và hiện thực `driveRelay()` cho `pump2`..`pump5` |
+
+Node đang chạy vẫn gửi id cũ `pump` cũng không sao — backend tự quy về `pump1`.
+
+---
+
+## Bước 6c — Dừng khẩn cấp
+
+Nút **DỪNG KHẨN CẤP** trên trang CONTROL không phải chỉ để trang trí. Khi bật:
+
+- backend đẩy lệnh TẮT cho **toàn bộ** 5 bơm và 4 van,
+- ép hệ thống về chế độ THỦ CÔNG,
+- **chặn** mọi lệnh BẬT (trả lỗi 409) và chặn chuyển sang TỰ ĐỘNG,
+- engine tự động ngừng chạy cho tới khi được giải trừ.
+
+Lệnh TẮT thì luôn được phép — an toàn không bao giờ bị khóa ngoài.
+
+> Đây là chốt chặn ở **phần mềm**. Nó không thay thế nút dừng khẩn cấp cứng nối
+> trực tiếp vào nguồn relay. Hệ thống bơm nước ngoài đồng vẫn nên có một nút cơ
+> khí cắt nguồn độc lập với phần mềm.
+
+---
+
 ## Bước 7 — Bật điều khiển tự động (nếu có đấu relay)
 
 1. Đấu relay bơm/van vào ESP32, rồi hiện thực hàm `driveRelay()` trong

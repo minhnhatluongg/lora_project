@@ -3,6 +3,7 @@
 Full-stack cho node cảm biến STM32 + ESP32 Master:
 
 - **Node cảm biến**: STM32F411CE (`testcode/`) — đầu dò đất Modbus RS485 (7 chỉ số) + 4 cảm biến siêu âm + LCD 1602
+- **Giao diện**: 5 trang theo bộ thiết kế bảng điều khiển (`front_require/`) — Menu · Dashboard · Control · Settings · About
 - **Backend**: Node.js + Express + Socket.IO + **SQLite** (`better-sqlite3`)
 - **Frontend**: React (Vite) + React Router + Recharts + Socket.IO client
 - **Xác thực**: JWT + 3 vai trò (admin / technician / viewer)
@@ -31,8 +32,17 @@ Full-stack cho node cảm biến STM32 + ESP32 Master:
 | `Phosphorus` | 5 | `p` | ppm | 1 mg/kg = 1 ppm |
 | `Potassium` | 6 | `k` | ppm | 1 mg/kg = 1 ppm |
 | `Dist1..Dist4` | — | `dist1..dist4` | cm | `-1` (hết timeout) → lưu `null` |
+| *(chưa có trong firmware)* | — | `air_temp` | °C | nhiệt độ **không khí** |
+| *(chưa có trong firmware)* | — | `air_humidity` | %RH | độ ẩm **không khí** |
+| *(chưa có trong firmware)* | — | `rain` | % | cảm biến mưa (0 = khô, 100 = ướt đẫm; board digital gửi 0/100) |
 | — | — | `level1..level4` | % | **suy ra** từ `dist` + hiệu chuẩn bồn, không lưu DB |
 | các nhánh lỗi Modbus | — | `sensor_status` | — | `OK` / `CRC` / `HEADER` / `TIMEOUT` / `SHORT` |
+
+> ⚠️ **3 dòng `air_temp` / `air_humidity` / `rain` backend đã sẵn sàng nhận, nhưng
+> `testcode/src/main.cpp` chưa đọc chúng.** Dashboard sẽ hiện `--` cho tới khi bổ
+> sung phần đọc cảm biến không khí (vd. DHT22/SHT31) và cảm biến mưa vào firmware,
+> rồi thêm 3 trường đó vào `sendUplink()`. Mọi trường đều tùy chọn nên firmware cũ
+> vẫn chạy bình thường, không cần sửa gấp.
 
 **4 cảm biến siêu âm = mực nước 4 bồn chứa.** Cảm biến đo khoảng cách từ đầu dò
 xuống mặt nước, backend quy ra % theo hiệu chuẩn 2 điểm đặt trong trang
@@ -210,9 +220,28 @@ Body của `POST /api/telemetry`:
 |---|---|---|
 | GET | `/api/devices` | Trạng thái tất cả thiết bị |
 | POST | `/api/devices/:id/command` | *(admin/technician)* Yêu cầu bật/tắt. Body: `{action:"ON"\|"OFF"}` → tạo lệnh chờ |
-| POST | `/api/devices/state` | ESP32 báo trạng thái relay thật. Body: `{pump:"ON",van1:"OFF",...}` |
+| POST | `/api/devices/state` | ESP32 báo trạng thái relay thật. Body: `{pump1:"ON",van1:"OFF",...}` |
 
-`:id` ∈ `pump, van1, van2, van3, van4`.
+`:id` ∈ `pump1..pump5, van1..van4` — **5 bơm + 4 van**.
+
+> Id cũ `pump` vẫn được chấp nhận và tự quy về `pump1`, nên ESP32 đang chạy ngoài
+> hiện trường không cần nạp lại firmware ngay. Database tự đổi tên `pump` → `pump1`
+> khi nâng cấp (đổi tên chứ không xóa-tạo, nên bơm đang chạy không bị nhảy về OFF).
+
+### Dừng khẩn cấp
+| Method | Endpoint | Mô tả |
+|---|---|---|
+| POST | `/api/status/estop` | *(admin/technician)* Body: `{engaged:true\|false}` |
+
+Khi bật: tắt toàn bộ thiết bị, ép về MANUAL, và **chặn thật** — mọi lệnh BẬT trả
+`409`, đổi sang AUTO trả `409`, engine tự động ngừng chạy. Lệnh TẮT luôn được phép.
+
+### Hệ thống
+| Method | Endpoint | Mô tả |
+|---|---|---|
+| POST | `/api/system/restart` | *(admin/technician)* Đưa lệnh `RESTART` vào hàng đợi cho ESP32 — **không** tắt tiến trình Node |
+| POST | `/api/system/restore-defaults` | *(admin)* Đưa cấu hình về mặc định gốc, giữ nguyên tài khoản và dữ liệu đo |
+| POST | `/api/auth/change-password` | Đổi mật khẩu chính mình. Body: `{currentPassword,newPassword}` |
 
 ### Lệnh điều khiển (hàng đợi cho ESP32)
 | Method | Endpoint | Mô tả |
@@ -283,35 +312,33 @@ lora_project/
 
 ---
 
-## 5b. Dashboard có gì
+## 5b. Giao diện có gì
 
-Giao diện nền sáng, nhãn song ngữ Việt–Anh, dựng theo đúng thiết kế bảng điều
-khiển của nhóm.
+Giao diện dựng theo bộ thiết kế bảng điều khiển trong `front_require/` — nền
+sáng, nhãn song ngữ Việt–Anh, icon nét vẽ (không dùng emoji), và bố cục vừa khít
+màn hình cảm ứng **1024×600** mà không phải cuộn.
 
-**Hai hàng thẻ tổng quan** (nhìn phát biết ngay, không cần cuộn):
+| Trang | Đường dẫn | Nội dung |
+|---|---|---|
+| **MENU** | `/menu` | 6 ô: Dashboard · Control · Settings · About · Đổi mật khẩu · Đăng xuất |
+| **DASHBOARD** | `/dashboard` | Hàng 1: nhiệt độ · độ ẩm · pH · EC. Hàng 2: Kali & Đạm · độ ẩm không khí · nhiệt độ không khí · cảm biến mưa · mực nước 4 bồn |
+| **CONTROL** | `/control` | Thủ công/Tự động · 5 bơm · 4 van · nút **DỪNG KHẨN CẤP** |
+| **SETTINGS** | `/settings` | Ngưỡng MIN/MAX (pH, EC, nhiệt độ, độ ẩm) · thời gian tưới & nghỉ · khởi động lại · khôi phục gốc |
+| **ABOUT** | `/about` | Tên đề tài · GVHD · 7 thành viên nhóm |
 
-| Hàng | Thẻ |
-|---|---|
-| 1 | Nhiệt độ · Độ ẩm · pH · EC · **Kali & Đạm** (2 chỉ số hệ thống thực sự châm) |
-| 2 | Trạng thái bơm · Trạng thái van · LoRa · **Mực nước 4 bồn** (Kali / Đạm / Nước / Trộn) |
+EC hiển thị **mS/cm** đúng như thiết kế, nhưng vẫn **lưu µS/cm** như đầu dò trả
+về — trang Cài đặt ghi rõ giá trị quy đổi bên dưới ô nhập để đối chiếu.
 
-**Cuộn xuống là phần đi sâu:**
-
-| Khu vực | Nội dung |
-|---|---|
-| Biểu đồ | 3 tab (Môi trường đất · Dinh dưỡng NPK · Mực nước) × 4 mốc thời gian (1h / 6h / 24h / 7 ngày), tooltip chung + crosshair |
-| Trạng thái hệ thống | Master, Slave, **đường Modbus RS485**, chất lượng RSSI, độ trễ dữ liệu, kênh realtime, chế độ |
-| Dinh dưỡng NPK | 3 thanh trên cùng thang ppm (có cả Lân), có vạch ngưỡng tối thiểu |
-| Điều khiển | AUTO/MANUAL + bật tắt bơm và 4 van |
-| Bảng dữ liệu | 2 chế độ xem (Đất + NPK / Bồn nước) — bản text của mọi con số trên dashboard |
+**Cuộn xuống dưới Dashboard và Settings** còn phần đi sâu mà bảng HMI không có
+chỗ chứa: biểu đồ 4 tab × 4 mốc thời gian, bảng dữ liệu, danh sách cảnh báo,
+hiệu chuẩn bồn nước và bảng luật AUTO. Nút QUAY LẠI dính đáy màn hình nên luôn
+bấm được dù cuộn tới đâu.
 
 Bốn màu chuỗi dữ liệu (xanh dương · xanh lá ngọc · tím hồng · cam) lấy từ thiết
-kế bảng điều khiển rồi kiểm tra tự động trên nền trắng: mọi cặp cách nhau ≥ 9.7 ΔE
-dưới cả ba dạng mù màu (protan/deutan/tritan), nằm trong dải sáng và đạt tương
-phản ≥ 3:1. Màu trạng thái (xanh/vàng/đỏ) giữ riêng, không bao giờ dùng làm màu
-chuỗi, và trạng thái luôn kèm biểu tượng + chữ chứ không chỉ dựa vào màu.
+kế rồi kiểm tra tự động trên nền trắng: mọi cặp cách nhau ≥ 9.7 ΔE dưới cả ba
+dạng mù màu, đạt tương phản ≥ 3:1. Màu trạng thái (xanh/vàng/đỏ) giữ riêng,
+không dùng làm màu chuỗi, và trạng thái luôn kèm biểu tượng + chữ.
 
----
 
 ## 6. Còn lại / có thể làm tiếp
 
@@ -320,6 +347,14 @@ chuỗi, và trạng thái luôn kèm biểu tượng + chữ chứ không chỉ
   dựa trên cả **mực nước bồn (%)** và NPK, không chỉ nhiệt độ/độ ẩm.
 - ✅ ~~Khớp dữ liệu firmware~~ → NPK + 4 siêu âm + trạng thái Modbus đã thông suốt
   từ `main.cpp` đến dashboard.
+- ✅ ~~Giao diện 5 trang theo thiết kế~~ → Menu/Dashboard/Control/Settings/About,
+  vừa khít màn 1024×600.
+- ⬜ **Firmware chưa đọc cảm biến không khí + mưa.** Backend, API và 3 thẻ trên
+  dashboard đã sẵn sàng; còn thiếu phần đọc DHT22/SHT31 + board cảm biến mưa
+  trong `testcode/src/main.cpp` và 3 trường tương ứng trong `sendUplink()`.
+- ⬜ **5 bơm mới chỉ có ở phần mềm.** Backend và trang CONTROL đã điều khiển được
+  `pump1..pump5`, nhưng ESP32 cần đấu đủ 5 relay và hiện thực `driveRelay()` cho
+  từng id thì lệnh mới ra tới phần cứng.
 - ⬜ **Chưa build thử firmware**: máy này chưa cài PlatformIO nên phần sửa
   `testcode/src/main.cpp` mới chỉ được rà soát thủ công. Chạy `pio run` một lần
   trước khi nạp chip.

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import { PageShell } from '../components/PageShell.jsx';
 import { ROLE_LABEL } from '../auth/AuthContext.jsx';
 
 const ROLES = ['admin', 'technician', 'viewer'];
@@ -8,51 +9,59 @@ const EMPTY = { username: '', password: '', fullName: '', role: 'viewer' };
 export function Users() {
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState(EMPTY);
-  const [msg, setMsg] = useState('');
+  // { kind: 'ok' | 'err', text } — the design forbids emoji, so success and
+  // failure are told apart by wording plus the .error tint, not by a glyph.
+  const [msg, setMsg] = useState(null);
 
-  const load = () => api.users().then(setUsers).catch((e) => setMsg(e.message));
+  const ok = (text) => setMsg({ kind: 'ok', text });
+  const fail = (e) => setMsg({ kind: 'err', text: e.message || 'Đã xảy ra lỗi' });
+
+  const load = () => api.users().then(setUsers).catch(fail);
   useEffect(() => { load(); }, []);
 
   const create = async (e) => {
     e.preventDefault();
-    setMsg('');
+    setMsg(null);
     try {
       await api.createUser(form);
       setForm(EMPTY);
-      setMsg('✅ Đã tạo tài khoản');
+      ok('Đã tạo tài khoản');
       load();
     } catch (err) {
-      setMsg('❌ ' + err.message);
+      fail(err);
     }
   };
 
   const changeRole = async (u, role) => {
     try { await api.updateUser(u.id, { role }); load(); }
-    catch (e) { setMsg('❌ ' + e.message); }
+    catch (e) { fail(e); }
   };
 
   const toggleActive = async (u) => {
     try { await api.updateUser(u.id, { active: !u.active }); load(); }
-    catch (e) { setMsg('❌ ' + e.message); }
+    catch (e) { fail(e); }
   };
 
   const resetPassword = async (u) => {
     const pw = prompt(`Mật khẩu mới cho "${u.username}":`);
     if (!pw) return;
-    try { await api.updateUser(u.id, { password: pw }); setMsg('✅ Đã đổi mật khẩu'); }
-    catch (e) { setMsg('❌ ' + e.message); }
+    try { await api.updateUser(u.id, { password: pw }); ok('Đã đổi mật khẩu'); }
+    catch (e) { fail(e); }
   };
 
   const remove = async (u) => {
     if (!confirm(`Xóa tài khoản "${u.username}"?`)) return;
     try { await api.deleteUser(u.id); load(); }
-    catch (e) { setMsg('❌ ' + e.message); }
+    catch (e) { fail(e); }
   };
 
   return (
-    <>
-      <div className="page-head"><h1>Quản lý người dùng</h1></div>
-      {msg && <div className="form-msg">{msg}</div>}
+    <PageShell title="USERS" onBack="/menu">
+      {msg && (
+        <div className={`form-msg${msg.kind === 'err' ? ' error' : ''}`} role="status">
+          {msg.text}
+        </div>
+      )}
 
       <div className="panel">
         <h3>Cấp tài khoản mới</h3>
@@ -61,18 +70,21 @@ export function Users() {
             placeholder="Tên đăng nhập"
             value={form.username}
             onChange={(e) => setForm({ ...form, username: e.target.value })}
+            autoComplete="username"
             required
           />
           <input
             placeholder="Họ tên"
             value={form.fullName}
             onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+            autoComplete="name"
           />
           <input
             type="password"
             placeholder="Mật khẩu"
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
+            autoComplete="new-password"
             required
           />
           <select
@@ -128,6 +140,8 @@ export function Users() {
           </table>
         </div>
       </div>
-    </>
+    </PageShell>
   );
 }
+
+export default Users;

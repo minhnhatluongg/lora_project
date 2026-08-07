@@ -34,9 +34,7 @@ export function NpkPanel({ latest, thresholds }) {
 
           return (
             <div key={key} className="npk-row">
-              <span className="npk-name">
-                {m.icon} {m.label}
-              </span>
+              <span className="npk-name">{m.label}</span>
 
               <div className="npk-track">
                 <div
