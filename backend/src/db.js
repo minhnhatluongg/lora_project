@@ -14,31 +14,39 @@ db.pragma('journal_mode = WAL'); // better concurrency for frequent IoT writes
 db.exec(`
   -- One row per reading of the STM32 node:
   --   * 7 Modbus registers from the RS485 soil probe (T/H/EC/pH/N/P/K)
+  --   * the air probe + rain board wired to the same node
   --   * 4 ultrasonic tank distances (cm, NULL when the echo timed out)
   CREATE TABLE IF NOT EXISTS telemetry (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    temperature REAL,      -- °C   (raw / 10)
-    humidity    REAL,      -- %    (raw / 10)
-    ph          REAL,      -- pH   (raw / 10)
-    ec          REAL,      -- µS/cm (raw, as the probe reports it)
-    n           INTEGER,   -- mg/kg
-    p           INTEGER,   -- mg/kg
-    k           INTEGER,   -- mg/kg
-    dist1       REAL,      -- cm
-    dist2       REAL,
-    dist3       REAL,
-    dist4       REAL,
-    lora_rssi   INTEGER,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    temperature  REAL,      -- °C   (raw / 10)
+    humidity     REAL,      -- %    (raw / 10)
+    ph           REAL,      -- pH   (raw / 10)
+    ec           REAL,      -- µS/cm (raw, as the probe reports it)
+    n            INTEGER,   -- mg/kg
+    p            INTEGER,   -- mg/kg
+    k            INTEGER,   -- mg/kg
+    air_temp     REAL,      -- °C   (air, not soil)
+    air_humidity REAL,      -- %RH  (air, not soil)
+    rain         REAL,      -- %    (0 = dry .. 100 = soaked; a digital board sends 0/100)
+    dist1        REAL,      -- cm
+    dist2        REAL,
+    dist3        REAL,
+    dist4        REAL,
+    lora_rssi    INTEGER,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_telemetry_created ON telemetry (created_at);
 
-  -- Current state of every actuator (pump + 4 valves)
+  -- Current state of every actuator (5 pumps + 4 valves).
+  -- last_on_at / last_off_at drive the irrigation short-cycle guard; see
+  -- services.js for the semantics.
   CREATE TABLE IF NOT EXISTS devices (
-    id         TEXT PRIMARY KEY,   -- 'pump', 'van1'..'van4'
-    name       TEXT NOT NULL,
-    state      INTEGER NOT NULL DEFAULT 0,  -- 0 = OFF, 1 = ON
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    id          TEXT PRIMARY KEY,   -- 'pump1'..'pump5', 'van1'..'van4'
+    name        TEXT NOT NULL,
+    state       INTEGER NOT NULL DEFAULT 0,  -- 0 = OFF, 1 = ON
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    last_on_at  TEXT,
+    last_off_at TEXT
   );
 
   -- Single-row system status table (id is always 1)
@@ -50,7 +58,8 @@ db.exec(`
     master_seen_at  TEXT,
     slave_seen_at   TEXT,
     sensor_status   TEXT,           -- 'OK' | 'CRC' | 'HEADER' | 'TIMEOUT' | 'SHORT'
-    sensor_error_at TEXT
+    sensor_error_at TEXT,
+    e_stop          INTEGER NOT NULL DEFAULT 0  -- 1 = DỪNG KHẨN CẤP engaged
   );
 
   -- Command queue: frontend enqueues, ESP32 master polls + acks.
@@ -59,8 +68,8 @@ db.exec(`
   -- master that reboots mid-command doesn't leave the device stuck forever.
   CREATE TABLE IF NOT EXISTS commands (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    device_id   TEXT NOT NULL,        -- 'pump','van1'..'van4','mode'
-    action      TEXT NOT NULL,        -- 'ON' | 'OFF' | 'AUTO' | 'MANUAL'
+    device_id   TEXT NOT NULL,        -- 'pump1'..'pump5','van1'..'van4','mode','system'
+    action      TEXT NOT NULL,        -- 'ON' | 'OFF' | 'AUTO' | 'MANUAL' | 'RESTART'
     status      TEXT NOT NULL DEFAULT 'pending',
     attempts    INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
@@ -122,14 +131,23 @@ addMissingColumns('telemetry', {
   dist2: 'REAL',
   dist3: 'REAL',
   dist4: 'REAL',
+  // Air probe + rain board added alongside the soil probe.
+  air_temp: 'REAL',
+  air_humidity: 'REAL',
+  rain: 'REAL',
 });
 addMissingColumns('system_status', {
   sensor_status: 'TEXT',
   sensor_error_at: 'TEXT',
+  e_stop: 'INTEGER NOT NULL DEFAULT 0',
 });
 addMissingColumns('commands', {
   attempts: 'INTEGER NOT NULL DEFAULT 0',
   sent_at: 'TEXT',
+});
+addMissingColumns('devices', {
+  last_on_at: 'TEXT',
+  last_off_at: 'TEXT',
 });
 
 const getMeta = (key) =>
@@ -160,9 +178,45 @@ if (Number(getMeta('schema_version') || 1) < 3) {
   setMeta('schema_version', 3);
 }
 
+// v4: the rig grew from one pump to five. RENAME the old 'pump' row to 'pump1'
+// so its state (and its row identity) survives — an INSERT + DELETE would flip
+// a running pump to OFF in the UI for one poll. pump2..pump5 come from the
+// default-device seed a few lines below (INSERT OR IGNORE, so it is a no-op for
+// anything that already exists). Command history is rewritten too, otherwise an
+// in-flight 'pump' command would ack against a device id that no longer exists.
+if (Number(getMeta('schema_version') || 1) < 4) {
+  const legacy = db.prepare(`SELECT * FROM devices WHERE id = 'pump'`).get();
+  if (legacy) {
+    const clash = db.prepare(`SELECT 1 FROM devices WHERE id = 'pump1'`).get();
+    if (clash) {
+      // Both ids somehow present (hand-edited DB): pump1 wins, drop the old row.
+      db.prepare(`DELETE FROM devices WHERE id = 'pump'`).run();
+      console.log(`[db] migrated: dropped legacy 'pump' row, 'pump1' already existed`);
+    } else {
+      db.prepare(
+        `UPDATE devices SET id = 'pump1', name = 'Bơm 1' WHERE id = 'pump'`
+      ).run();
+      console.log(
+        `[db] migrated: device 'pump' -> 'pump1' (state ${legacy.state ? 'ON' : 'OFF'} preserved)`
+      );
+    }
+  }
+  const cmds = db
+    .prepare(`UPDATE commands SET device_id = 'pump1' WHERE device_id = 'pump'`)
+    .run();
+  if (cmds.changes > 0)
+    console.log(`[db] migrated: ${cmds.changes} lệnh 'pump' -> 'pump1'`);
+  setMeta('schema_version', 4);
+}
+
 // --- Seed default rows if missing -------------------------------------------
+// Five pumps and four valves, matching the relay board on the panel drawing.
 const defaultDevices = [
-  { id: 'pump', name: 'Bơm nước' },
+  { id: 'pump1', name: 'Bơm 1' },
+  { id: 'pump2', name: 'Bơm 2' },
+  { id: 'pump3', name: 'Bơm 3' },
+  { id: 'pump4', name: 'Bơm 4' },
+  { id: 'pump5', name: 'Bơm 5' },
   { id: 'van1', name: 'Van 1' },
   { id: 'van2', name: 'Van 2' },
   { id: 'van3', name: 'Van 3' },
@@ -195,20 +249,30 @@ if (userCount === 0) {
 export const defaultConfig = {
   thresholds: { ...config.thresholds },
 
+  // Watering cycle for the pumps, in minutes. Enforced by the AUTO engine as a
+  // short-cycle guard (services.js) — not a timer that runs pumps on its own.
+  irrigation: { ...config.irrigation },
+
   // Ultrasonic sensors measure the air gap from the sensor down to the water.
   //   emptyCm = distance read when the tank is empty (sensor -> bottom)
   //   fullCm  = distance read when the tank is full  (sensor -> full water line)
   // Fill level % = (emptyCm - distance) / (emptyCm - fullCm) * 100, clamped 0..100.
+  // A fertigation rig: two nutrient tanks, a water tank and the mixing tank.
+  // ECHO1..ECHO4 on the STM32 map to these in order; rename in the web UI.
   tanks: {
-    dist1: { name: 'Bồn 1', enabled: true, emptyCm: 100, fullCm: 15 },
-    dist2: { name: 'Bồn 2', enabled: true, emptyCm: 100, fullCm: 15 },
-    dist3: { name: 'Bồn 3', enabled: true, emptyCm: 100, fullCm: 15 },
-    dist4: { name: 'Bồn 4', enabled: true, emptyCm: 100, fullCm: 15 },
+    dist1: { name: 'Bồn Kali', enabled: true, emptyCm: 100, fullCm: 15 },
+    dist2: { name: 'Bồn Đạm', enabled: true, emptyCm: 100, fullCm: 15 },
+    dist3: { name: 'Bồn Nước', enabled: true, emptyCm: 100, fullCm: 15 },
+    dist4: { name: 'Trộn', enabled: true, emptyCm: 100, fullCm: 15 },
   },
 
   // For each device: in AUTO mode turn ON when <metric> is <op> <value>, else OFF.
   automation: {
-    pump: { enabled: false, metric: 'humidity', op: 'below', value: 40 },
+    pump1: { enabled: false, metric: 'humidity', op: 'below', value: 40 },
+    pump2: { enabled: false, metric: 'humidity', op: 'below', value: 35 },
+    pump3: { enabled: false, metric: 'n', op: 'below', value: 50 },
+    pump4: { enabled: false, metric: 'p', op: 'below', value: 30 },
+    pump5: { enabled: false, metric: 'k', op: 'below', value: 60 },
     van1: { enabled: false, metric: 'humidity', op: 'below', value: 50 },
     van2: { enabled: false, metric: 'level1', op: 'below', value: 20 },
     van3: { enabled: false, metric: 'temperature', op: 'above', value: 35 },
@@ -225,8 +289,18 @@ if (!existingCfgRow) {
   );
 } else {
   const saved = JSON.parse(existingCfgRow.data);
+
+  // v4 device rename: carry the old single-pump rule over to pump1, otherwise
+  // the rebuild below (which is keyed on the new device ids) would silently
+  // drop a rule the operator had tuned.
+  if (saved.automation?.pump && !saved.automation.pump1) {
+    saved.automation.pump1 = saved.automation.pump;
+  }
+  delete saved.automation?.pump;
+
   const merged = {
     thresholds: { ...defaultConfig.thresholds, ...(saved.thresholds || {}) },
+    irrigation: { ...defaultConfig.irrigation, ...(saved.irrigation || {}) },
     tanks: Object.fromEntries(
       Object.entries(defaultConfig.tanks).map(([id, t]) => [
         id,

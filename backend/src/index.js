@@ -22,6 +22,7 @@ import { statusRouter } from './routes/status.js';
 import { authRouter } from './routes/auth.js';
 import { usersRouter } from './routes/users.js';
 import { configRouter } from './routes/config.js';
+import { systemRouter } from './routes/system.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -68,6 +69,7 @@ app.use('/api/devices', devicesRouter);
 app.use('/api/commands', commandsRouter);
 app.use('/api/alerts', alertsRouter);
 app.use('/api/status', statusRouter);
+app.use('/api/system', systemRouter);
 
 // 404 + error handlers
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));

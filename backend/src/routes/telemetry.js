@@ -27,6 +27,19 @@ const distance = (v) => {
   return n == null || n < 0 ? null : n;
 };
 
+// The rain board comes in two flavours in the field: an analogue one that
+// reports a wetness percentage, and a digital one that only says "raining".
+// Normalise the boolean form to the ends of the same 0..100 scale so the HMI
+// has a single field to read.
+const rainValue = (v) => {
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v === 'boolean') return v ? 100 : 0;
+  const word = String(v).trim().toLowerCase();
+  if (word === 'true' || word === 'yes') return 100;
+  if (word === 'false' || word === 'no') return 0;
+  return num(v);
+};
+
 // Accept both the short field names and the firmware's own variable names, so
 // the ESP32 bridge can forward whichever it finds easier to build.
 const pick = (body, ...names) => {
@@ -37,7 +50,8 @@ const pick = (body, ...names) => {
 };
 
 // ESP32 master posts a sensor reading here — one full sweep of the STM32 node:
-// 7 Modbus registers from the RS485 soil probe + 4 ultrasonic distances.
+// 7 Modbus registers from the RS485 soil probe, the air probe + rain board,
+// and 4 ultrasonic distances.
 telemetryRouter.post(
   '/',
   deviceAuth,
@@ -52,6 +66,12 @@ telemetryRouter.post(
       n: num(pick(b, 'n', 'N', 'nitrogen', 'Nitrogen')),
       p: num(pick(b, 'p', 'P', 'phosphorus', 'Phosphorus')),
       k: num(pick(b, 'k', 'K', 'potassium', 'Potassium')),
+      // Air probe + rain board. Like every other field these are optional: a
+      // node without them simply omits them and the row keeps NULLs, rather
+      // than recording a fake 0 that would trip the thresholds.
+      air_temp: num(pick(b, 'air_temp', 'airTemp', 'air_temperature', 'AirTemp', 'temp_air')),
+      air_humidity: num(pick(b, 'air_humidity', 'airHumidity', 'air_hum', 'airHum', 'AirHumidity', 'hum_air')),
+      rain: rainValue(pick(b, 'rain', 'rain_pct', 'rainPct', 'raining', 'Rain')),
       dist1: distance(pick(b, 'dist1', 'd1', 'Dist1')),
       dist2: distance(pick(b, 'dist2', 'd2', 'Dist2')),
       dist3: distance(pick(b, 'dist3', 'd3', 'Dist3')),
@@ -67,8 +87,11 @@ telemetryRouter.post(
     const info = db
       .prepare(
         `INSERT INTO telemetry
-           (temperature, humidity, ph, ec, n, p, k, dist1, dist2, dist3, dist4, lora_rssi)
+           (temperature, humidity, ph, ec, n, p, k,
+            air_temp, air_humidity, rain,
+            dist1, dist2, dist3, dist4, lora_rssi)
          VALUES (@temperature, @humidity, @ph, @ec, @n, @p, @k,
+                 @air_temp, @air_humidity, @rain,
                  @dist1, @dist2, @dist3, @dist4, @lora_rssi)`
       )
       .run({ ...reading, lora_rssi: loraRssi });

@@ -2,82 +2,158 @@
 // colours and threshold logic. Every panel reads from here so a metric looks
 // and reads the same everywhere on the dashboard.
 //
-// Colour sets were validated for the dark chart surface (#0f172a) — each group
-// that appears together in one plot passes lightness-band, chroma, CVD
-// separation (protan/deutan/tritan) and contrast checks.
-
-// Reserved status colours. Never used as a series colour.
-export const STATUS_COLOR = {
-  ok: '#22c55e',
-  warn: '#f59e0b',
-  crit: '#ef4444',
+// Four series hues, taken from the panel design and then validated against the
+// white chart surface: every pair is >= 9.7 ΔE apart under protanopia,
+// deuteranopia and tritanopia, inside the light-mode lightness band, above the
+// chroma floor and above 3:1 contrast. No group that shares a plot reuses a hue.
+export const SERIES = {
+  blue: '#2563eb',
+  green: '#059669',
+  purple: '#a21caf',
+  orange: '#ea580c',
 };
 
-export const STATUS_ICON = { ok: '✓', warn: '!', crit: '⨯' };
+// Reserved status colours — darkened for a white background, and never used as
+// a series colour. They always ship with an icon and a word, never colour alone.
+export const STATUS_COLOR = {
+  ok: '#15803d',
+  warn: '#b45309',
+  crit: '#dc2626',
+};
+
+export const STATUS_ICON = { ok: '✓', warn: '!', crit: '✕' };
 export const STATUS_TEXT = { ok: 'Bình thường', warn: 'Cảnh báo', crit: 'Nguy hiểm' };
 
 export const METRICS = {
   // --- Soil probe: registers 0..3 (shown as small multiples together) -------
-  temperature: { label: 'Nhiệt độ', short: 'Nhiệt độ', unit: '°C', icon: '🌡️', color: '#ea580c', decimals: 1 },
-  humidity:    { label: 'Độ ẩm đất', short: 'Độ ẩm', unit: '%', icon: '💧', color: '#0891b2', decimals: 1 },
-  ph:          { label: 'Độ pH', short: 'pH', unit: '', icon: '⚗️', color: '#8b5cf6', decimals: 1 },
-  ec:          { label: 'Độ dẫn điện (EC)', short: 'EC', unit: 'µS/cm', icon: '🧪', color: '#db2777', decimals: 0 },
+  temperature: { label: 'Nhiệt độ', en: 'Temperature', short: 'Nhiệt độ', unit: '°C', color: SERIES.blue, decimals: 1 },
+  humidity:    { label: 'Độ ẩm', en: 'Humidity', short: 'Độ ẩm', unit: '%RH', color: SERIES.green, decimals: 1 },
+  ph:          { label: 'pH', en: 'pH Level', short: 'pH', unit: 'pH', color: SERIES.purple, decimals: 1 },
+  // EC arrives from the probe in µS/cm and is STORED that way (telemetry rows
+  // and thresholds alike). The panel labels it mS/cm, so every display path goes
+  // through ecToMs()/fmtValue() — see `storedUnit` below.
+  ec:          { label: 'Độ dẫn điện (EC)', en: 'EC Level', short: 'EC', unit: 'mS/cm', storedUnit: 'µS/cm', color: SERIES.orange, decimals: 2 },
 
   // --- Soil probe: registers 4..6, NPK (shown together in one plot) --------
-  n: { label: 'Đạm (N)', short: 'N', unit: 'mg/kg', icon: '🌿', color: '#2563eb', decimals: 0 },
-  p: { label: 'Lân (P)', short: 'P', unit: 'mg/kg', icon: '🌾', color: '#d97706', decimals: 0 },
-  k: { label: 'Kali (K)', short: 'K', unit: 'mg/kg', icon: '🍃', color: '#0d9488', decimals: 0 },
+  // For solids 1 mg/kg = 1 ppm, so ppm is used to match the panel labels.
+  n: { label: 'Đạm (N)', en: 'Nitrogen', short: 'N', unit: 'ppm', color: SERIES.green, decimals: 0 },
+  p: { label: 'Lân (P)', en: 'Phosphorus', short: 'P', unit: 'ppm', color: SERIES.orange, decimals: 0 },
+  k: { label: 'Kali (K)', en: 'Potassium', short: 'K', unit: 'ppm', color: SERIES.purple, decimals: 0 },
+
+  // --- Air probe + rain sensor ---------------------------------------------
+  air_temp:     { label: 'Nhiệt độ không khí', en: 'Temperature (Air)', short: 'Nhiệt độ KK', unit: '°C', color: SERIES.blue, decimals: 1 },
+  air_humidity: { label: 'Độ ẩm không khí', en: 'Humidity (Air)', short: 'Độ ẩm KK', unit: '%RH', color: SERIES.green, decimals: 1 },
+  rain:         { label: 'Cảm biến mưa', en: 'Rain Sensor', short: 'Mưa', unit: '%', color: SERIES.purple, decimals: 0 },
 
   // --- Ultrasonic tanks: raw distance + derived fill level ------------------
-  dist1: { label: 'Khoảng cách 1', short: 'D1', unit: 'cm', color: '#0891b2', decimals: 1 },
-  dist2: { label: 'Khoảng cách 2', short: 'D2', unit: 'cm', color: '#8b5cf6', decimals: 1 },
-  dist3: { label: 'Khoảng cách 3', short: 'D3', unit: 'cm', color: '#d97706', decimals: 1 },
-  dist4: { label: 'Khoảng cách 4', short: 'D4', unit: 'cm', color: '#db2777', decimals: 1 },
-  level1: { label: 'Mực nước bồn 1', short: 'Bồn 1', unit: '%', color: '#0891b2', decimals: 0 },
-  level2: { label: 'Mực nước bồn 2', short: 'Bồn 2', unit: '%', color: '#8b5cf6', decimals: 0 },
-  level3: { label: 'Mực nước bồn 3', short: 'Bồn 3', unit: '%', color: '#d97706', decimals: 0 },
-  level4: { label: 'Mực nước bồn 4', short: 'Bồn 4', unit: '%', color: '#db2777', decimals: 0 },
+  // A fertigation rig: two nutrient tanks, a water tank and the mixing tank.
+  dist1: { label: 'Khoảng cách bồn Kali', short: 'D1', unit: 'cm', color: SERIES.purple, decimals: 1 },
+  dist2: { label: 'Khoảng cách bồn Đạm', short: 'D2', unit: 'cm', color: SERIES.green, decimals: 1 },
+  dist3: { label: 'Khoảng cách bồn Nước', short: 'D3', unit: 'cm', color: SERIES.blue, decimals: 1 },
+  dist4: { label: 'Khoảng cách bồn Trộn', short: 'D4', unit: 'cm', color: SERIES.orange, decimals: 1 },
+  level1: { label: 'Bồn Kali', en: 'Potassium tank', short: 'Bồn Kali', unit: '%', color: SERIES.purple, decimals: 0 },
+  level2: { label: 'Bồn Đạm', en: 'Nitrogen tank', short: 'Bồn Đạm', unit: '%', color: SERIES.green, decimals: 0 },
+  level3: { label: 'Bồn Nước', en: 'Water tank', short: 'Bồn Nước', unit: '%', color: SERIES.blue, decimals: 0 },
+  level4: { label: 'Trộn', en: 'Mixing tank', short: 'Trộn', unit: '%', color: SERIES.orange, decimals: 0 },
 };
 
 export const SOIL_KEYS = ['temperature', 'humidity', 'ph', 'ec'];
 export const NPK_KEYS = ['n', 'p', 'k'];
+export const AIR_KEYS = ['air_temp', 'air_humidity'];
 export const LEVEL_KEYS = ['level1', 'level2', 'level3', 'level4'];
 export const TANK_IDS = ['dist1', 'dist2', 'dist3', 'dist4'];
+
+// The actuators wired to the slave node: five pumps and four valves.
+export const DEVICE_IDS = {
+  pumps: ['pump1', 'pump2', 'pump3', 'pump4', 'pump5'],
+  valves: ['van1', 'van2', 'van3', 'van4'],
+};
+
+// Fallback display names, matching what the backend seeds into `devices`.
+export const DEVICE_LABEL = {
+  pump1: 'Bơm 1', pump2: 'Bơm 2', pump3: 'Bơm 3', pump4: 'Bơm 4', pump5: 'Bơm 5',
+  van1: 'Van 1', van2: 'Van 2', van3: 'Van 3', van4: 'Van 4',
+};
 
 // Metrics an AUTO rule may be built on, grouped for the <optgroup> in Settings.
 export const AUTOMATION_METRIC_GROUPS = [
   { label: 'Đất (RS485)', keys: [...SOIL_KEYS, ...NPK_KEYS] },
+  { label: 'Không khí & mưa', keys: [...AIR_KEYS, 'rain'] },
   { label: 'Mực nước bồn (%)', keys: LEVEL_KEYS },
   { label: 'Khoảng cách siêu âm (cm)', keys: TANK_IDS },
 ];
 
+// --- EC unit conversion -----------------------------------------------------
+// Stored/transported in µS/cm, displayed in mS/cm. Never hand-roll the /1000.
+export function ecToMs(rawMicro) {
+  const n = Number(rawMicro);
+  if (rawMicro == null || rawMicro === '' || Number.isNaN(n)) return null;
+  return n / 1000;
+}
+
+// The inverse, for settings forms: user types mS/cm, storage wants µS/cm.
+export function ecFromMs(ms) {
+  const n = Number(ms);
+  if (ms == null || ms === '' || Number.isNaN(n)) return null;
+  return Math.round(n * 1000);
+}
+
+// Stored value -> the number actually drawn on screen (charts, gauges, axes).
+// Only EC differs today; route every metric through here so it stays that way.
+export function displayValue(value, key) {
+  const n = Number(value);
+  if (value == null || value === '' || Number.isNaN(n)) return null;
+  return key === 'ec' ? n / 1000 : n;
+}
+
 // --- Threshold evaluation ---------------------------------------------------
+// A configured bound, or null when the operator left that side open. Settings
+// ships partial threshold objects, so "missing" must mean "no bound on that
+// side" — never NaN comparisons that silently report everything as ok.
+const bound = (v) => {
+  const n = Number(v);
+  return v == null || v === '' || Number.isNaN(n) ? null : n;
+};
+
+function rangeStatus(value, min, max, under = 'warn', over = 'warn') {
+  const lo = bound(min);
+  const hi = bound(max);
+  if (hi != null && value > hi) return over;
+  if (lo != null && value < lo) return under;
+  return 'ok';
+}
+
 // Returns 'ok' | 'warn' | 'crit', or null when the metric has no threshold or
-// the reading is missing.
+// the reading is missing. EC is compared in STORED units (µS/cm), the same
+// units the thresholds are saved in.
 export function metricStatus(key, value, thresholds) {
   if (value == null || !thresholds) return null;
   const t = thresholds;
   switch (key) {
     case 'temperature':
-      return value > t.tempMax ? 'crit' : 'ok';
+      // Heat is the dangerous side of this range, cold is only a warning.
+      return rangeStatus(value, t.tempMin, t.tempMax, 'warn', 'crit');
     case 'humidity':
-      return value < t.humidityMin ? 'warn' : 'ok';
+      return rangeStatus(value, t.humidityMin, t.humidityMax);
     case 'ph':
-      return value < t.phMin || value > t.phMax ? 'warn' : 'ok';
+      return rangeStatus(value, t.phMin, t.phMax);
     case 'ec':
-      return value > t.ecMax ? 'warn' : 'ok';
+      return rangeStatus(value, t.ecMin, t.ecMax);
     case 'n':
-      return value < t.nMin ? 'warn' : 'ok';
+      return rangeStatus(value, t.nMin, null);
     case 'p':
-      return value < t.pMin ? 'warn' : 'ok';
+      return rangeStatus(value, t.pMin, null);
     case 'k':
-      return value < t.kMin ? 'warn' : 'ok';
+      return rangeStatus(value, t.kMin, null);
     case 'level1':
     case 'level2':
     case 'level3':
-    case 'level4':
-      if (value < t.tankLowPct / 2) return 'crit';
-      return value < t.tankLowPct ? 'warn' : 'ok';
+    case 'level4': {
+      const low = bound(t.tankLowPct);
+      if (low == null) return 'ok';
+      if (value < low / 2) return 'crit';
+      return value < low ? 'warn' : 'ok';
+    }
     default:
       return null;
   }
@@ -89,23 +165,49 @@ export function statusReason(key, value, thresholds) {
   const s = metricStatus(key, value, thresholds);
   if (!s || s === 'ok') return null;
   const t = thresholds;
+  const side = (min, max, unit) => {
+    const hi = bound(max);
+    return hi != null && value > hi ? `> ${hi}${unit}` : `< ${bound(min)}${unit}`;
+  };
   switch (key) {
-    case 'temperature': return `> ${t.tempMax}°C`;
-    case 'humidity': return `< ${t.humidityMin}%`;
-    case 'ph': return value < t.phMin ? `< ${t.phMin}` : `> ${t.phMax}`;
-    case 'ec': return `> ${t.ecMax} µS/cm`;
-    case 'n': return `< ${t.nMin} mg/kg`;
-    case 'p': return `< ${t.pMin} mg/kg`;
-    case 'k': return `< ${t.kMin} mg/kg`;
-    default: return `< ${t.tankLowPct}%`;
+    case 'temperature': return side(t.tempMin, t.tempMax, '°C');
+    case 'humidity': return side(t.humidityMin, t.humidityMax, '%');
+    case 'ph': return side(t.phMin, t.phMax, '');
+    case 'ec': {
+      // Thresholds are stored in µS/cm but the HMI talks mS/cm.
+      const hi = bound(t.ecMax);
+      return hi != null && value > hi
+        ? `> ${ecToMs(hi).toFixed(2)} mS/cm`
+        : `< ${ecToMs(bound(t.ecMin)).toFixed(2)} mS/cm`;
+    }
+    case 'n': return `< ${bound(t.nMin)} ppm`;
+    case 'p': return `< ${bound(t.pMin)} ppm`;
+    case 'k': return `< ${bound(t.kMin)} ppm`;
+    default: return `< ${bound(t.tankLowPct)}%`;
   }
 }
 
+// What the rain sensor is telling us, in words. `value` is the stored 0..100
+// reading; null/absent means the node never reported one.
+export function rainState(value) {
+  const n = Number(value);
+  if (value == null || value === '' || Number.isNaN(n)) {
+    return { text: 'Không có dữ liệu', level: 'ok' };
+  }
+  if (n < 5) return { text: 'Không mưa', level: 'ok' };
+  if (n < 40) return { text: 'Mưa nhẹ', level: 'warn' };
+  return { text: 'Mưa to', level: 'crit' };
+}
+
 // --- Formatting -------------------------------------------------------------
+// Takes the STORED value and returns the display string, so callers never have
+// to know that EC is the one metric whose units change on the way to the screen.
 export function fmtValue(value, key) {
-  if (value == null || Number.isNaN(value)) return '--';
+  const n = Number(value);
+  if (value == null || value === '' || Number.isNaN(n)) return '--';
+  if (key === 'ec') return (n / 1000).toFixed(METRICS.ec.decimals);
   const m = METRICS[key];
-  return Number(value).toFixed(m?.decimals ?? 1);
+  return n.toFixed(m?.decimals ?? 1);
 }
 
 // SQLite stores 'YYYY-MM-DD HH:MM:SS' in UTC.

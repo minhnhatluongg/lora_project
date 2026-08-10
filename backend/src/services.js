@@ -3,6 +3,19 @@ import { config } from './config.js';
 import { emit, EVENTS } from './realtime.js';
 
 // ---- Devices ---------------------------------------------------------------
+// The panel drives five pumps and four valves. Pumps and valves behave
+// differently in AUTO (only pumps get the short-cycle guard), so keep the two
+// lists separate rather than pattern-matching on the id string everywhere.
+export const PUMP_IDS = ['pump1', 'pump2', 'pump3', 'pump4', 'pump5'];
+export const VALVE_IDS = ['van1', 'van2', 'van3', 'van4'];
+
+// Back-compat: firmware flashed before the one-pump -> five-pump change still
+// says 'pump'. Accept it everywhere a device id comes in from outside and
+// resolve it to the renamed row, so a field ESP32 keeps working un-reflashed.
+const LEGACY_DEVICE_IDS = { pump: 'pump1' };
+export const resolveDeviceId = (id) =>
+  LEGACY_DEVICE_IDS[String(id ?? '')] || String(id ?? '');
+
 export function getDevices() {
   return db
     .prepare(`SELECT id, name, state, updated_at FROM devices ORDER BY id`)
@@ -11,13 +24,23 @@ export function getDevices() {
 }
 
 export function setDeviceState(id, on) {
-  const info = db
-    .prepare(
-      `UPDATE devices SET state = ?, updated_at = datetime('now') WHERE id = ?`
-    )
-    .run(on ? 1 : 0, id);
-  if (info.changes > 0) emit(EVENTS.DEVICES, getDevices());
-  return info.changes > 0;
+  const deviceId = resolveDeviceId(id);
+  const before = db
+    .prepare(`SELECT state FROM devices WHERE id = ?`)
+    .get(deviceId);
+  if (!before) return false;
+
+  const next = on ? 1 : 0;
+  db.prepare(
+    `UPDATE devices SET state = ?, updated_at = datetime('now') WHERE id = ?`
+  ).run(next, deviceId);
+
+  // Only a real OFF->ON / ON->OFF flip restarts the pump short-cycle guard;
+  // the master re-reporting the same state every poll must not keep pushing it.
+  if (before.state !== next) markPumpTransition(deviceId, next ? 'ON' : 'OFF');
+
+  emit(EVENTS.DEVICES, getDevices());
+  return true;
 }
 
 // ---- System status ---------------------------------------------------------
@@ -40,12 +63,55 @@ export function getStatus() {
     // Result of the last Modbus RS485 transaction reported by the STM32 node.
     sensorStatus: row.sensor_status || null,
     sensorErrorAt: row.sensor_error_at,
+    // DỪNG KHẨN CẤP — see setEmergencyStop() for what it inhibits.
+    eStop: !!row.e_stop,
   };
 }
 
 export function setMode(mode) {
   db.prepare(`UPDATE system_status SET mode = ? WHERE id = 1`).run(mode);
   emit(EVENTS.STATUS, getStatus());
+}
+
+// ---- Emergency stop --------------------------------------------------------
+export function isEStopEngaged() {
+  return !!db.prepare(`SELECT e_stop FROM system_status WHERE id = 1`).get()
+    ?.e_stop;
+}
+
+// The red "DỪNG KHẨN CẤP" bar on the CONTROL screen. Engaging it must leave the
+// field in a state nothing can re-energise on its own:
+//   1. queue OFF for every actuator (the ESP32 applies them on its next poll),
+//   2. park the system in MANUAL so runAutomation() can't undo step 1,
+//   3. shout about it in the alert feed.
+// While engaged, runAutomation() is inert and the control endpoint refuses ON.
+// Releasing it does NOT restart anything — the operator goes back to AUTO by
+// hand once they know why they hit the button.
+export function setEmergencyStop(engaged, actor = 'người dùng') {
+  db.prepare(`UPDATE system_status SET e_stop = ? WHERE id = 1`).run(
+    engaged ? 1 : 0
+  );
+
+  if (engaged) {
+    for (const { id } of db.prepare(`SELECT id FROM devices`).all()) {
+      enqueueCommand(id, 'OFF');
+    }
+    enqueueCommand('mode', 'MANUAL');
+    setMode('MANUAL');
+    createAlert(
+      'danger',
+      `DỪNG KHẨN CẤP: đã tắt toàn bộ bơm và van, chuyển sang chế độ THỦ CÔNG (${actor})`
+    );
+  } else {
+    createAlert(
+      'info',
+      `Đã gỡ DỪNG KHẨN CẤP (${actor}) — hệ thống vẫn ở chế độ THỦ CÔNG`
+    );
+  }
+
+  const status = getStatus();
+  emit(EVENTS.STATUS, status);
+  return status;
 }
 
 export function touchMaster({ loraRssi, slaveOnline, sensorStatus } = {}) {
@@ -243,6 +309,22 @@ export const withLevelsAll = (rows) => {
 };
 
 // ---- Threshold checks ------------------------------------------------------
+// A bound that is null / '' / not a number means "no limit on that side" — the
+// Settings screen lets an operator clear one half of a MIN/MAX pair.
+const bound = (v) => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+const isBelow = (value, min) => {
+  const b = bound(min);
+  return value != null && b != null && value < b;
+};
+const isAbove = (value, max) => {
+  const b = bound(max);
+  return value != null && b != null && value > b;
+};
+
 // `reading` is a telemetry row already enriched with level1..level4.
 export function checkThresholds(reading) {
   const cfg = getConfig();
@@ -252,39 +334,104 @@ export function checkThresholds(reading) {
   const check = (key, active, level, message) =>
     active ? raise(key, level, message) : clearCondition(key);
 
-  check('ph-low', ph != null && ph < t.phMin, 'warning',
+  check('ph-low', isBelow(ph, t.phMin), 'warning',
     `pH ${ph} thấp hơn ngưỡng (${t.phMin})`);
-  check('ph-high', ph != null && ph > t.phMax, 'warning',
+  check('ph-high', isAbove(ph, t.phMax), 'warning',
     `pH ${ph} cao hơn ngưỡng (${t.phMax})`);
-  check('ec-high', ec != null && ec > t.ecMax, 'warning',
+  // EC stays in µS/cm end to end; only the HMI divides by 1000 to show mS/cm.
+  check('ec-low', isBelow(ec, t.ecMin), 'warning',
+    `EC ${ec} µS/cm thấp hơn ngưỡng (${t.ecMin} µS/cm)`);
+  check('ec-high', isAbove(ec, t.ecMax), 'warning',
     `EC ${ec} µS/cm cao hơn ngưỡng (${t.ecMax} µS/cm)`);
-  check('temp-high', temperature != null && temperature > t.tempMax, 'danger',
+  check('temp-low', isBelow(temperature, t.tempMin), 'warning',
+    `Nhiệt độ ${temperature}°C thấp hơn ngưỡng (${t.tempMin}°C)`);
+  check('temp-high', isAbove(temperature, t.tempMax), 'danger',
     `Nhiệt độ ${temperature}°C cao hơn ngưỡng (${t.tempMax}°C)`);
-  check('humidity-low', humidity != null && humidity < t.humidityMin, 'warning',
+  check('humidity-low', isBelow(humidity, t.humidityMin), 'warning',
     `Độ ẩm đất ${humidity}% thấp hơn ngưỡng (${t.humidityMin}%)`);
+  check('humidity-high', isAbove(humidity, t.humidityMax), 'warning',
+    `Độ ẩm đất ${humidity}% cao hơn ngưỡng (${t.humidityMax}%)`);
 
-  check('n-low', n != null && n < t.nMin, 'warning',
-    `Đạm (N) ${n} mg/kg thấp hơn ngưỡng (${t.nMin})`);
-  check('p-low', p != null && p < t.pMin, 'warning',
-    `Lân (P) ${p} mg/kg thấp hơn ngưỡng (${t.pMin})`);
-  check('k-low', k != null && k < t.kMin, 'warning',
-    `Kali (K) ${k} mg/kg thấp hơn ngưỡng (${t.kMin})`);
+  check('n-low', isBelow(n, t.nMin), 'warning',
+    `Đạm (N) ${n} ppm thấp hơn ngưỡng (${t.nMin})`);
+  check('p-low', isBelow(p, t.pMin), 'warning',
+    `Lân (P) ${p} ppm thấp hơn ngưỡng (${t.pMin})`);
+  check('k-low', isBelow(k, t.kMin), 'warning',
+    `Kali (K) ${k} ppm thấp hơn ngưỡng (${t.kMin})`);
 
   TANK_IDS.forEach((distKey, i) => {
     const tank = cfg.tanks?.[distKey];
     if (!tank?.enabled) return clearCondition(`tank-${i + 1}`);
     const pct = reading[`level${i + 1}`];
-    check(`tank-${i + 1}`, pct != null && pct < t.tankLowPct, 'danger',
+    check(`tank-${i + 1}`, isBelow(pct, t.tankLowPct), 'danger',
       `${tank.name} còn ${pct}% — dưới ngưỡng (${t.tankLowPct}%)`);
     check(`tank-${i + 1}-err`, reading[distKey] == null, 'warning',
       `${tank.name}: cảm biến siêu âm không phản hồi`);
   });
 }
 
+// ---- Irrigation short-cycle guard (PUMPS ONLY) -----------------------------
+// A rule whose metric hovers around its threshold would otherwise slam a pump
+// ON/OFF every few seconds and cook the motor. `irrigation` in the app config
+// bounds that:
+//
+//   runMinutes  — once a pump goes ON, no AUTO rule may switch it OFF until
+//                 this many minutes have passed (minimum watering time).
+//   restMinutes — once a pump goes OFF, no AUTO rule may switch it ON again
+//                 until this many minutes have passed (cool-down).
+//
+// Only the AUTO engine is held back. A human pressing ON/OFF (MANUAL mode or
+// POST /api/devices/:id/command) is never blocked — the guard protects the
+// hardware from a jittery sensor, not from its operator. Valves are unaffected:
+// they cost nothing to cycle.
+//
+// The two timestamps live in the devices table so the guard survives a restart,
+// and are stamped both when AUTO *decides* on a transition and when the device
+// state actually flips (ack from the master / state report), whichever is first.
+// A NULL timestamp means "no constraint on that side" — a device that has never
+// run can start immediately.
+function markPumpTransition(id, action) {
+  if (!PUMP_IDS.includes(id)) return;
+  const column = action === 'ON' ? 'last_on_at' : 'last_off_at';
+  db.prepare(
+    `UPDATE devices SET ${column} = datetime('now') WHERE id = ?`
+  ).run(id);
+}
+
+const minutesSince = (ts) =>
+  ts == null ? Infinity : (Date.now() - new Date(ts + 'Z').getTime()) / 60000;
+
+// Returns a Vietnamese reason string when the transition must be suppressed,
+// or null when AUTO is free to act.
+function irrigationBlock(deviceId, desired, irrigation) {
+  if (!PUMP_IDS.includes(deviceId)) return null;
+  const row = db
+    .prepare(`SELECT last_on_at, last_off_at FROM devices WHERE id = ?`)
+    .get(deviceId);
+  if (!row) return null;
+
+  const runMinutes = Number(irrigation?.runMinutes) || 0;
+  const restMinutes = Number(irrigation?.restMinutes) || 0;
+
+  if (desired === 'OFF' && runMinutes > 0) {
+    const elapsed = minutesSince(row.last_on_at);
+    if (elapsed < runMinutes)
+      return `chưa đủ thời gian tưới tối thiểu ${runMinutes} phút (còn ${Math.ceil(runMinutes - elapsed)} phút)`;
+  }
+  if (desired === 'ON' && restMinutes > 0) {
+    const elapsed = minutesSince(row.last_off_at);
+    if (elapsed < restMinutes)
+      return `đang trong thời gian nghỉ ${restMinutes} phút (còn ${Math.ceil(restMinutes - elapsed)} phút)`;
+  }
+  return null;
+}
+
 // ---- AUTO-mode automation engine -------------------------------------------
-// Metrics a rule may reference. Raw probe values plus the derived tank levels.
+// Metrics a rule may reference. Raw probe values (soil + air + rain) plus the
+// derived tank levels.
 export const AUTOMATION_METRICS = [
   'temperature', 'humidity', 'ph', 'ec', 'n', 'p', 'k',
+  'air_temp', 'air_humidity', 'rain',
   'dist1', 'dist2', 'dist3', 'dist4',
   'level1', 'level2', 'level3', 'level4',
 ];
@@ -293,8 +440,12 @@ export const AUTOMATION_METRICS = [
 // enabled rule. If a device's desired state differs from its current state and
 // there's no pending command yet, enqueue a command for the ESP32 to execute.
 export function runAutomation(reading) {
+  // Emergency stop wins over everything: the whole point is that nothing turns
+  // itself back on while someone is standing in the field.
+  if (isEStopEngaged()) return;
   if (getStatus().mode !== 'AUTO') return;
-  const { automation } = getConfig();
+  const cfg = getConfig();
+  const automation = cfg.automation;
 
   for (const [deviceId, rule] of Object.entries(automation || {})) {
     if (!rule?.enabled) continue;
@@ -318,7 +469,18 @@ export function runAutomation(reading) {
     // 'pending'/'sent' count — expired and failed ones must not block forever.
     if (hasLiveCommand(deviceId)) continue;
 
+    // Short-cycle guard. Uses raise() so a pump held back for 15 minutes logs
+    // once per alert window instead of once per reading.
+    const blockKey = `irrigation-${deviceId}-${desired}`;
+    const blocked = irrigationBlock(deviceId, desired, cfg.irrigation);
+    if (blocked) {
+      raise(blockKey, 'info', `AUTO: giữ ${deviceId} ở ${current} — ${blocked}`);
+      continue;
+    }
+    clearCondition(blockKey);
+
     enqueueCommand(deviceId, desired);
+    markPumpTransition(deviceId, desired);
     createAlert(
       'info',
       `AUTO: ${deviceId} → ${desired} (${rule.metric} ${metricValue} ${rule.op} ${rule.value})`

@@ -9,7 +9,7 @@ import {
 
 const MIN_KEY = { n: 'nMin', p: 'pMin', k: 'kMin' };
 
-// NPK are three magnitudes on one common scale (mg/kg), so they read as bars
+// NPK are three magnitudes on one common scale (ppm), so they read as bars
 // against a shared axis with the configured minimum drawn as a reference line.
 export function NpkPanel({ latest, thresholds }) {
   const values = NPK_KEYS.map((k) => latest?.[k]).filter((v) => v != null);
@@ -20,7 +20,7 @@ export function NpkPanel({ latest, thresholds }) {
     <div className="panel">
       <div className="panel-head">
         <h3>Dinh dưỡng đất (NPK)</h3>
-        <span className="panel-sub">mg/kg</span>
+        <span className="panel-sub">ppm</span>
       </div>
 
       <div className="npk-list">
@@ -34,9 +34,7 @@ export function NpkPanel({ latest, thresholds }) {
 
           return (
             <div key={key} className="npk-row">
-              <span className="npk-name">
-                {m.icon} {m.label}
-              </span>
+              <span className="npk-name">{m.label}</span>
 
               <div className="npk-track">
                 <div
@@ -47,7 +45,7 @@ export function NpkPanel({ latest, thresholds }) {
                   <span
                     className="npk-min"
                     style={{ left: `${minPct}%` }}
-                    title={`Ngưỡng tối thiểu: ${min} mg/kg`}
+                    title={`Ngưỡng tối thiểu: ${min} ppm`}
                   />
                 )}
               </div>
