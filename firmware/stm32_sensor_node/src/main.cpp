@@ -27,8 +27,8 @@ HardwareSerial loraSerial(PA3, PA2);
 #define TRIG_PIN  PB12
 #define ECHO1_PIN PB13 // Cảm biến 1
 #define ECHO2_PIN PB14 // Cảm biến 2
-#define ECHO3_PIN PB15 // Cảm biến 3 (Bồn Kali)
-#define ECHO4_PIN PA8  // Cảm biến 4 (Bồn Nước)
+#define ECHO3_PIN PB15 // Cảm biến 3 (Bồn Nước)
+#define ECHO4_PIN PA8  // Cảm biến 4 (Bồn Trộn)
 
 // --- BIẾN LƯU TRỮ DỮ LIỆU CẢM BIẾN THẬT ---
 float Temperature = 0.0;
@@ -40,10 +40,10 @@ uint16_t Phosphorus = 0;
 uint16_t Potassium  = 0;
 
 // Khoảng cách 4 bồn (cm)
-float Dist1 = 0.0;
-float Dist2 = 0.0;
-float Dist3 = 0.0; // Bồn Kali
-float Dist4 = 0.0; // Bồn Nước (Đã hiệu chuẩn +13cm)
+float Dist1 = 0.0; // Bồn Đạm
+float Dist2 = 0.0; // Bồn Kali
+float Dist3 = 0.0; // Bồn Nước
+float Dist4 = 0.0; // Bồn Trộn (Đã hiệu chuẩn +13cm)
 // --- BIẾN LƯU TRỮ MÔI TRƯỜNG KHÔNG KHÍ & MƯA ---
 float AirTemp     = 0.0;
 int   RainPercent = 0;

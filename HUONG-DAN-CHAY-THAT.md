@@ -528,24 +528,40 @@ proxy có HTTPS.
 
 ---
 
-## ⚠️ Cần kiểm tra: ánh xạ 4 bồn đang mâu thuẫn trong code
+## Ánh xạ 4 bồn — đã chốt theo dây thật
 
-Biến `Dist3` và `Dist4` đang được hiểu theo **ba cách khác nhau**:
+Nhóm phần cứng đã xác nhận thứ tự này. Backend và dashboard đã đặt tên theo đúng đây:
 
-| Nguồn | `Dist3` là gì | `Dist4` là gì |
+| Cảm biến | Chân STM32 | Biến | Bồn |
+|---|---|---|---|
+| Siêu âm 1 | `PB13` (ECHO1) | `Dist1` | **Bồn Đạm** |
+| Siêu âm 2 | `PB14` (ECHO2) | `Dist2` | **Bồn Kali** |
+| Siêu âm 3 | `PB15` (ECHO3) | `Dist3` | **Bồn Nước** |
+| Siêu âm 4 | `PA8` (ECHO4) | `Dist4` | **Bồn Trộn** |
+
+Nếu sau này dời đầu dò sang chân khác, chỉ cần **đổi tên trong SETTINGS →
+Hiệu chuẩn bồn nước**, không phải sửa code.
+
+### ⚠️ Hệ quả: logic AUTO trong ESP32 đang dùng nhầm hai biến
+
+Với ánh xạ đã chốt ở trên, hai chỗ trong `firmware/esp32_master/esp32_master.ino`
+đang tham chiếu **ngược nhau**:
+
+| Dòng code hiện tại | Ý định | Với ánh xạ đã chốt thì nó đang đọc |
 |---|---|---|
-| Chú thích trong `main.cpp` | Bồn Kali | Bồn Nước |
-| Thứ tự hiện lên Nextion (`t8`, `t9`) | Bồn Nước | Trộn |
-| Logic pha phân trong `esp32_master.ino` | **bồn Trộn** (bơm nước vào khi > 50 cm) | **bồn Nước** (cạn khi > 80 cm) |
+| `if (Dist3 > 50.0)` → bật Bơm 3 hút nước vào bồn trộn | mức **bồn Trộn** | ❌ mức **bồn Nước** |
+| `isTankEmpty = (Dist4 > 80)` → khóa an toàn "bồn cạn" | mức **bồn Nước** | ❌ mức **bồn Trộn** |
 
-Điều này **ảnh hưởng đến hành vi thật**: khóa an toàn "bồn cạn" và bước "bơm nước
-vào bồn trộn" đều dựa vào hai biến này. Hãy đo thực tế xem đầu dò siêu âm nào cắm
-vào chân nào (`ECHO1`=PB13, `ECHO2`=PB14, `ECHO3`=PB15, `ECHO4`=PA8) rồi thống
-nhất lại một cách duy nhất.
+Hậu quả nếu để nguyên: bơm châm nước vào bồn trộn sẽ dừng/chạy theo mực nước của
+**bồn nguồn** thay vì bồn trộn, và khóa an toàn "hết nước" sẽ kích hoạt theo mực
+**bồn trộn**.
 
-Backend đặt tên mặc định theo **thứ tự trên Nextion**: `dist1`=Bồn Kali,
-`dist2`=Bồn Đạm, `dist3`=Bồn Nước, `dist4`=Trộn. Đổi tên được ngay trong
-**SETTINGS → Hiệu chuẩn bồn nước**, không cần sửa code.
+**Sửa bằng cách đổi chỗ hai biến** trong hai hàm `handleAutoMixingLogic()` và
+`handleAutoIrrigationLogic()`: dùng `Dist4` cho bồn trộn, `Dist3` cho bồn nước.
+
+> Tôi **chưa tự sửa** phần này vì nó là logic điều khiển bơm thật — nên do người
+> nắm sa bàn quyết định và thử tay trước khi chạy AUTO. Chạy ở chế độ **THỦ CÔNG**
+> thì không ảnh hưởng gì.
 
 ---
 

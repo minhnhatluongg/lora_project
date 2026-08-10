@@ -47,12 +47,15 @@ export const METRICS = {
 
   // --- Ultrasonic tanks: raw distance + derived fill level ------------------
   // A fertigation rig: two nutrient tanks, a water tank and the mixing tank.
-  dist1: { label: 'Khoảng cách bồn Kali', short: 'D1', unit: 'cm', color: SERIES.purple, decimals: 1 },
-  dist2: { label: 'Khoảng cách bồn Đạm', short: 'D2', unit: 'cm', color: SERIES.green, decimals: 1 },
+  // Thứ tự do nhóm phần cứng xác nhận theo dây thật:
+  //   ECHO1 (PB13) = Đạm | ECHO2 (PB14) = Kali | ECHO3 (PB15) = Nước | ECHO4 (PA8) = Trộn
+  // Màu đi theo CHẤT trong bồn, cùng hệ với biểu đồ NPK: Đạm xanh lá, Kali tím.
+  dist1: { label: 'Khoảng cách bồn Đạm', short: 'D1', unit: 'cm', color: SERIES.green, decimals: 1 },
+  dist2: { label: 'Khoảng cách bồn Kali', short: 'D2', unit: 'cm', color: SERIES.purple, decimals: 1 },
   dist3: { label: 'Khoảng cách bồn Nước', short: 'D3', unit: 'cm', color: SERIES.blue, decimals: 1 },
   dist4: { label: 'Khoảng cách bồn Trộn', short: 'D4', unit: 'cm', color: SERIES.orange, decimals: 1 },
-  level1: { label: 'Bồn Kali', en: 'Potassium tank', short: 'Bồn Kali', unit: '%', color: SERIES.purple, decimals: 0 },
-  level2: { label: 'Bồn Đạm', en: 'Nitrogen tank', short: 'Bồn Đạm', unit: '%', color: SERIES.green, decimals: 0 },
+  level1: { label: 'Bồn Đạm', en: 'Nitrogen tank', short: 'Bồn Đạm', unit: '%', color: SERIES.green, decimals: 0 },
+  level2: { label: 'Bồn Kali', en: 'Potassium tank', short: 'Bồn Kali', unit: '%', color: SERIES.purple, decimals: 0 },
   level3: { label: 'Bồn Nước', en: 'Water tank', short: 'Bồn Nước', unit: '%', color: SERIES.blue, decimals: 0 },
   level4: { label: 'Trộn', en: 'Mixing tank', short: 'Trộn', unit: '%', color: SERIES.orange, decimals: 0 },
 };

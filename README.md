@@ -392,9 +392,12 @@ không dùng làm màu chuỗi, và trạng thái luôn kèm biểu tượng + c
   (hiện gán cứng `32.5 / 70.0 / 15`) bằng lệnh đọc DHT22/SHT31 + board mưa.
 - ⬜ **Bơm 2–5 chưa đấu relay.** Backend, trang CONTROL, ESP32 và Nano đã điều
   khiển được `pump1..pump5`; chỉ còn đấu dây relay thật ở tủ điện.
-- ⬜ **Ánh xạ `Dist3`/`Dist4` đang mâu thuẫn** giữa chú thích STM32, thứ tự Nextion
-  và logic pha phân của ESP32 — cần đo dây thật rồi thống nhất. Xem cảnh báo cuối
-  [HUONG-DAN-CHAY-THAT.md](HUONG-DAN-CHAY-THAT.md).
+- ✅ ~~Ánh xạ 4 bồn~~ → nhóm phần cứng đã chốt: `dist1`=Đạm, `dist2`=Kali,
+  `dist3`=Nước, `dist4`=Trộn. Backend và dashboard đã đổi theo.
+- ⬜ **Logic AUTO trong ESP32 dùng nhầm `Dist3`/`Dist4`** cho bồn Nước và bồn Trộn
+  — cần đổi chỗ hai biến trong `handleAutoMixingLogic()` và
+  `handleAutoIrrigationLogic()`. Chi tiết ở [HUONG-DAN-CHAY-THAT.md](HUONG-DAN-CHAY-THAT.md).
+  Chạy THỦ CÔNG thì không ảnh hưởng.
 - ⬜ **Chưa biên dịch thử firmware**: máy dựng bản này không có PlatformIO lẫn
   Arduino CLI, nên phần sửa trong `firmware/` mới chỉ được rà tay. Bấm
   Verify/`pio run` một lần trước khi nạp chip.

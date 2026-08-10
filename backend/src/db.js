@@ -209,6 +209,24 @@ if (Number(getMeta('schema_version') || 1) < 4) {
   setMeta('schema_version', 4);
 }
 
+// v5: the first two ultrasonic sensors were labelled the wrong way round. The
+// hardware team confirmed ECHO1 is the nitrogen tank and ECHO2 the potassium
+// one, not the reverse. Swap the stored names — but ONLY where they still hold
+// the old defaults, so an operator who already renamed a tank keeps their name.
+if (Number(getMeta('schema_version') || 1) < 5) {
+  const row = db.prepare(`SELECT data FROM app_config WHERE id = 1`).get();
+  if (row) {
+    const cfg = JSON.parse(row.data);
+    if (cfg.tanks?.dist1?.name === 'Bồn Kali' && cfg.tanks?.dist2?.name === 'Bồn Đạm') {
+      cfg.tanks.dist1.name = 'Bồn Đạm';
+      cfg.tanks.dist2.name = 'Bồn Kali';
+      db.prepare(`UPDATE app_config SET data = ? WHERE id = 1`).run(JSON.stringify(cfg));
+      console.log(`[db] migrated: đổi tên bồn dist1 -> Bồn Đạm, dist2 -> Bồn Kali`);
+    }
+  }
+  setMeta('schema_version', 5);
+}
+
 // --- Seed default rows if missing -------------------------------------------
 // Five pumps and four valves, matching the relay board on the panel drawing.
 const defaultDevices = [
@@ -258,10 +276,12 @@ export const defaultConfig = {
   //   fullCm  = distance read when the tank is full  (sensor -> full water line)
   // Fill level % = (emptyCm - distance) / (emptyCm - fullCm) * 100, clamped 0..100.
   // A fertigation rig: two nutrient tanks, a water tank and the mixing tank.
-  // ECHO1..ECHO4 on the STM32 map to these in order; rename in the web UI.
+  // Order confirmed against the physical wiring by the hardware team:
+  //   ECHO1 (PB13) = Đạm | ECHO2 (PB14) = Kali | ECHO3 (PB15) = Nước | ECHO4 (PA8) = Trộn
+  // Rename in SETTINGS if a sensor is ever moved.
   tanks: {
-    dist1: { name: 'Bồn Kali', enabled: true, emptyCm: 100, fullCm: 15 },
-    dist2: { name: 'Bồn Đạm', enabled: true, emptyCm: 100, fullCm: 15 },
+    dist1: { name: 'Bồn Đạm', enabled: true, emptyCm: 100, fullCm: 15 },
+    dist2: { name: 'Bồn Kali', enabled: true, emptyCm: 100, fullCm: 15 },
     dist3: { name: 'Bồn Nước', enabled: true, emptyCm: 100, fullCm: 15 },
     dist4: { name: 'Trộn', enabled: true, emptyCm: 100, fullCm: 15 },
   },

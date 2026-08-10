@@ -90,24 +90,32 @@ Muốn chạy hoàn toàn offline (chỉ Nextion + LoRa) thì đặt `#define EN
 
 ## ⚠️ Ba điều phải kiểm trước khi chạy với phần cứng thật
 
-### 1. Ánh xạ 4 bồn đang mâu thuẫn giữa các file
+### 1. Logic AUTO đang dùng nhầm biến bồn Nước / bồn Trộn
 
-Trong chính code hiện tại, `Dist3` và `Dist4` được hiểu theo **hai cách khác nhau**:
+Ánh xạ 4 bồn **đã được nhóm phần cứng chốt theo dây thật**:
 
-| Nguồn | Dist3 là gì | Dist4 là gì |
+| Chân STM32 | Biến | Bồn |
 |---|---|---|
-| Chú thích trong `stm32_sensor_node` | Bồn Kali | Bồn Nước |
-| Thứ tự hiện lên Nextion (`t8`, `t9`) | Bồn Nước | Trộn |
-| Logic pha phân trong `esp32_master` | **bồn Trộn** (bơm nước vào khi > 50 cm) | **bồn Nước** (cạn khi > 80 cm) |
+| `PB13` (ECHO1) | `Dist1` | **Bồn Đạm** |
+| `PB14` (ECHO2) | `Dist2` | **Bồn Kali** |
+| `PB15` (ECHO3) | `Dist3` | **Bồn Nước** |
+| `PA8` (ECHO4) | `Dist4` | **Bồn Trộn** |
 
-Cái này **ảnh hưởng đến hành vi thật**: khóa an toàn "bồn cạn" và bước "bơm nước
-vào bồn trộn" đều dựa vào hai biến này. Hãy đo thực tế xem đầu dò siêu âm nào cắm
-vào chân nào (`ECHO1`=PB13, `ECHO2`=PB14, `ECHO3`=PB15, `ECHO4`=PA8), rồi thống
-nhất lại một cách duy nhất.
+Backend và dashboard đã đặt tên theo đúng bảng này (đổi được trong
+**SETTINGS → Hiệu chuẩn bồn nước** nếu sau này dời đầu dò).
 
-Backend đang đặt tên mặc định theo **thứ tự trên Nextion**: `dist1`=Bồn Kali,
-`dist2`=Bồn Đạm, `dist3`=Bồn Nước, `dist4`=Trộn. Đổi tên được ngay trong trang
-**SETTINGS → Hiệu chuẩn bồn nước**, không cần sửa code.
+**Nhưng logic AUTO trong `esp32_master.ino` vẫn tham chiếu ngược:**
+
+| Code hiện tại | Ý định | Thực tế đang đọc |
+|---|---|---|
+| `if (Dist3 > 50.0)` → bật Bơm 3 hút nước vào bồn trộn | mức **bồn Trộn** | ❌ mức **bồn Nước** |
+| `isTankEmpty = (Dist4 > 80)` → khóa an toàn "bồn cạn" | mức **bồn Nước** | ❌ mức **bồn Trộn** |
+
+Sửa bằng cách **đổi chỗ hai biến** trong `handleAutoMixingLogic()` và
+`handleAutoIrrigationLogic()`: `Dist4` cho bồn trộn, `Dist3` cho bồn nước.
+
+> Chưa tự sửa vì đây là logic điều khiển bơm thật — để người nắm sa bàn quyết
+> định và thử tay trước. Chạy ở chế độ **THỦ CÔNG** thì không ảnh hưởng.
 
 ### 2. Cảm biến không khí và mưa vẫn là số giả
 

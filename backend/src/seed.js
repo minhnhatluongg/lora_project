@@ -72,7 +72,7 @@ db.prepare(
 db.prepare('DELETE FROM alerts').run();
 db.prepare(`INSERT INTO alerts (level, message) VALUES ('warning','pH 5.4 thấp hơn ngưỡng (5.5)')`).run();
 db.prepare(`INSERT INTO alerts (level, message) VALUES ('warning','Đạm (N) 42 ppm thấp hơn ngưỡng (50)')`).run();
-db.prepare(`INSERT INTO alerts (level, message) VALUES ('danger','Bồn Kali còn 12% — dưới ngưỡng (20%)')`).run();
+db.prepare(`INSERT INTO alerts (level, message) VALUES ('danger','Bồn Đạm còn 12% — dưới ngưỡng (20%)')`).run();
 
 const devices = db.prepare(`SELECT COUNT(*) AS n FROM devices`).get().n;
 console.log(

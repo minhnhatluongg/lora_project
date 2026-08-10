@@ -410,9 +410,11 @@ export const IconSave = (p) => (
 // off-centre blob at the 22px the tank rows use.
 const MIX_BLADE = 'M12 10.2c-2.2-2-2.5-4.2-.9-5.2 1.3-.8 3 .2 3.1 2 .1 1.3-.6 2.5-2.2 3.2Z';
 
+// Glyph theo CHẤT trong bồn, không theo số thứ tự cảm biến:
+// dist1 = Đạm (lá), dist2 = Kali (bình hoá chất), dist3 = Nước (giọt), dist4 = Trộn (cánh khuấy).
 export const TANK_ICON = {
-  dist1: IconPh,
-  dist2: IconLeaf,
+  dist1: IconLeaf,
+  dist2: IconPh,
   dist3: IconHumidity,
   dist4: (p) => (
     <Svg {...p}>

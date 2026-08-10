@@ -218,7 +218,7 @@ export const openapiSpec = {
             additionalProperties: {
               type: 'object',
               properties: {
-                name: { type: 'string', example: 'Bồn Kali' },
+                name: { type: 'string', example: 'Bồn Đạm' },
                 enabled: { type: 'boolean' },
                 emptyCm: { type: 'number', example: 100, description: 'Khoảng cách đọc được khi bồn cạn' },
                 fullCm: { type: 'number', example: 15, description: 'Khoảng cách đọc được khi bồn đầy' },

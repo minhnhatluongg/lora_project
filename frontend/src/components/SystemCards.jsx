@@ -158,8 +158,8 @@ function TanksCard({ latest, tanks, thresholds }) {
 
   const rows = shown.map((id) => {
     // Index the level key by the tank's own position, never by the position it
-    // happens to land on after filtering — otherwise disabling Bồn Kali would
-    // silently relabel Bồn Đạm with Bồn Kali's percentage.
+    // happens to land on after filtering — otherwise disabling Bồn Đạm would
+    // silently relabel Bồn Kali with Bồn Đạm's percentage.
     const levelKey = LEVEL_KEYS[TANK_IDS.indexOf(id)];
     const m = METRICS[levelKey];
     const pct = latest?.[levelKey];
