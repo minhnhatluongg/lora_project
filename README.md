@@ -2,7 +2,7 @@
 
 Full-stack cho node cảm biến STM32 + ESP32 Master:
 
-- **Node cảm biến**: STM32F411CE (`testcode/`) — đầu dò đất Modbus RS485 (7 chỉ số) + 4 cảm biến siêu âm + LCD 1602
+- **Phần cứng**: 3 trạm trong `firmware/` — STM32 (đo) · ESP32 (master + Nextion) · Arduino Nano (10 relay)
 - **Giao diện**: 5 trang theo bộ thiết kế bảng điều khiển (`front_require/`) — Menu · Dashboard · Control · Settings · About
 - **Backend**: Node.js + Express + Socket.IO + **SQLite** (`better-sqlite3`)
 - **Frontend**: React (Vite) + React Router + Recharts + Socket.IO client
@@ -11,16 +11,26 @@ Full-stack cho node cảm biến STM32 + ESP32 Master:
 
 ```
 Đầu dò đất RS485 ──Modbus──┐
-                            ├─► STM32F411 ──UART(JSON)──► ESP32 Master ──WiFi/HTTP──► Node backend ──REST + WebSocket──► React Dashboard
-4 × siêu âm HC-SR04 ────────┘                                                              │
-                                                                                    SQLite (data/farm.db)
+4 × siêu âm HC-SR04 ───────┼─► STM32F411 ──LoRa E32──► ESP32 MASTER ──WiFi/HTTP──► Node backend :4000 ──► React Dashboard :5173
+Không khí + mưa ───────────┘   (TRẠM ĐO)   <DATA:...>   (TRẠM TRUNG TÂM)      │
+                                                             │          SQLite (data/farm.db)
+                                                   Nextion HMI│
+                                                             │ LoRa E32 <ONn>/<OFFn>
+                                                             ▼        ◄── <ACK>/<SYNC>
+                                                   Arduino Nano (TỦ ĐIỆN)
+                                                   10 relay: 5 bơm · 4 van · 1 báo AUTO
 ```
+
+**Ba trạm phần cứng chạy độc lập với nhau.** Mất WiFi hay tắt backend thì hệ
+thống vẫn tưới bình thường bằng Nextion và nút cơ dưới tủ điện — chỉ dashboard
+web là không cập nhật.
 
 ---
 
 ## 0. Node cảm biến đo những gì
 
-Đây là bảng mapping giữa firmware (`testcode/src/main.cpp`) và backend:
+Bảng mapping giữa firmware (`firmware/stm32_sensor_node/src/main.cpp`) và backend.
+STM32 đóng cả 14 thông số vào một gói LoRa rồi ESP32 dịch sang JSON:
 
 | Firmware | Thanh ghi Modbus | Trường API | Đơn vị | Ghi chú |
 |---|---|---|---|---|
@@ -32,21 +42,20 @@ Full-stack cho node cảm biến STM32 + ESP32 Master:
 | `Phosphorus` | 5 | `p` | ppm | 1 mg/kg = 1 ppm |
 | `Potassium` | 6 | `k` | ppm | 1 mg/kg = 1 ppm |
 | `Dist1..Dist4` | — | `dist1..dist4` | cm | `-1` (hết timeout) → lưu `null` |
-| *(chưa có trong firmware)* | — | `air_temp` | °C | nhiệt độ **không khí** |
-| *(chưa có trong firmware)* | — | `air_humidity` | %RH | độ ẩm **không khí** |
-| *(chưa có trong firmware)* | — | `rain` | % | cảm biến mưa (0 = khô, 100 = ướt đẫm; board digital gửi 0/100) |
+| `RainPercent` | — | `rain` | % | 0 = khô, 100 = ướt đẫm (board digital gửi 0/100) |
+| `AirTemp` | — | `air_temp` | °C | nhiệt độ **không khí** |
+| `AirHum` | — | `air_humidity` | %RH | độ ẩm **không khí** |
 | — | — | `level1..level4` | % | **suy ra** từ `dist` + hiệu chuẩn bồn, không lưu DB |
-| các nhánh lỗi Modbus | — | `sensor_status` | — | `OK` / `CRC` / `HEADER` / `TIMEOUT` / `SHORT` |
+| ESP32 suy ra | — | `sensor_status` | — | `OK` / `TIMEOUT` khi đầu dò RS485 im lặng |
 
-> ⚠️ **3 dòng `air_temp` / `air_humidity` / `rain` backend đã sẵn sàng nhận, nhưng
-> `testcode/src/main.cpp` chưa đọc chúng.** Dashboard sẽ hiện `--` cho tới khi bổ
-> sung phần đọc cảm biến không khí (vd. DHT22/SHT31) và cảm biến mưa vào firmware,
-> rồi thêm 3 trường đó vào `sendUplink()`. Mọi trường đều tùy chọn nên firmware cũ
-> vẫn chạy bình thường, không cần sửa gấp.
+> ⚠️ **Ba trường không khí / mưa đã có trong gói LoRa, nhưng hàm `readAirSensors()`
+> trong STM32 vẫn đang gán số cứng** (`AirTemp = 32.5; AirHum = 70.0; RainPercent = 15;`).
+> Đấu board cảm biến thật vào **và** thay 3 dòng đó thì số mới là thật. Mọi trường
+> đều tùy chọn nên hệ thống vẫn chạy bình thường trong lúc chưa lắp.
 
 **4 cảm biến siêu âm = mực nước 4 bồn chứa.** Cảm biến đo khoảng cách từ đầu dò
 xuống mặt nước, backend quy ra % theo hiệu chuẩn 2 điểm đặt trong trang
-**Cài đặt & Tự động**:
+**SETTINGS → Hiệu chuẩn bồn nước**:
 
 ```
 mức nước % = (emptyCm − khoảng_cách_đo) / (emptyCm − fullCm) × 100      (kẹp 0..100)
@@ -122,9 +131,14 @@ Mở **http://localhost:4000/api/docs** — giao diện Swagger UI tương tác:
 | **viewer** (Người xem) | ✓ | ✗ | ✗ | ✗ |
 
 - Admin vào trang **Người dùng** để cấp tài khoản, đổi vai trò, khóa/mở, reset mật khẩu.
-- Admin/Kỹ thuật vào trang **Cài đặt & Tự động** để chỉnh ngưỡng cảnh báo và luật bật/tắt van.
+- Admin/Kỹ thuật vào trang **SETTINGS** để chỉnh ngưỡng cảnh báo và luật bật/tắt van.
 - **Luật tự động**: ở chế độ AUTO, mỗi lần có dữ liệu cảm biến, backend tự đánh giá luật
   (vd. "Van 1 BẬT khi độ ẩm < 50%") và đẩy lệnh xuống ESP32 — phần cứng/LoRa không phải sửa gì.
+
+> ⚠️ **Hai bộ não tự động — chỉ dùng một.** ESP32 đã có sẵn state machine tưới và
+> pha phân chạy tại chỗ (không cần mạng, có khóa chéo bồn cạn/trời mưa). Luật tự
+> động ở backend **mặc định tắt hết** — để nguyên như vậy, nếu không hai bên sẽ
+> giành nhau cùng một relay. Chi tiết ở [HUONG-DAN-CHAY-THAT.md](HUONG-DAN-CHAY-THAT.md).
 
 ### (Tùy chọn) Terminal 3 — Giả lập ESP32
 Để thấy dashboard cập nhật real-time mà chưa có phần cứng:
@@ -137,40 +151,36 @@ node src/simulator.js
 
 ## 3. Kết nối phần cứng thật
 
-### 3.1 Đấu dây STM32 ↔ ESP32
+> Đấu dây chi tiết từng chân, nạp firmware và xử lý lỗi:
+> xem [**HUONG-DAN-CHAY-THAT.md**](HUONG-DAN-CHAY-THAT.md).
+> Dưới đây chỉ là phần tối thiểu để nối được lên backend.
 
-`Serial1` (PA9/PA10) đã dành cho RS485 và `Serial` (USB CDC) dành cho debug, nên
-kênh lên ESP32 dùng **USART2**:
+### 3.1 Đường dữ liệu
 
-| STM32F411CE | | ESP32 |
-|---|---|---|
-| PA2 (TX2) | ──► | GPIO16 (RX2) |
-| PA3 (RX2) | ◄── | GPIO17 (TX2) |
-| GND | ─── | GND *(bắt buộc chung mass)* |
+Cả hai chặng đều đi qua **LoRa E32**, không phải UART thẳng:
 
-Sau mỗi lượt đọc, STM32 in **một dòng JSON** ra kênh này (hàm `sendUplink()`):
+| Chặng | Nội dung truyền |
+|---|---|
+| STM32 → ESP32 | `<DATA:Temp,Hum,EC,pH,N,P,K,D1,D2,D3,D4,Rain,AirTemp,AirHum>` mỗi 2 phút |
+| ESP32 → Nano | `<ON1>`…`<ON9>` / `<OFF1>`…`<OFF9>` / `<ESTOP>` / `<SET_MODE=…>` |
+| Nano → ESP32 | `<ACK_…>` xác nhận, `<SYNC:BOM1=1>` khi bấm nút cơ dưới tủ |
 
-```json
-{"temperature":31.2,"humidity":45.6,"ph":6.5,"ec":1200,"n":118,"p":57,"k":190,
- "dist1":42.5,"dist2":88.0,"dist3":31.2,"dist4":-1.0,"sensor_status":"OK"}
-```
+ESP32 nhận gói `<DATA:…>`, chèn thêm `slave_online` + `sensor_status`, đóng thành
+JSON rồi `POST /api/telemetry`.
 
-ESP32 đọc tới `\n`, chèn thêm `lora_rssi` + `slave_online` rồi POST thẳng lên
-`/api/telemetry` — không phải map lại tên trường.
+> Chiều RX/TX của module LoRa dễ đấu ngược: **RX của board nối vào TXD của
+> module**, TX nối vào RXD. Nối TX↔TXD là hai bên im lặng hoàn toàn.
 
-> Dòng JSON được gửi ở **mọi** nhánh kết thúc của vòng lặp, kể cả khi Modbus lỗi.
-> Khi đó 7 chỉ số đất giữ giá trị đọc được lần cuối, nhưng `sensor_status` sẽ là
-> `CRC`/`HEADER`/`TIMEOUT`/`SHORT` và dashboard hiện đúng lý do ở thẻ **RS485**.
-> Riêng 4 khoảng cách siêu âm vẫn luôn mới, vì chúng được đo độc lập với RS485.
+### 3.2 Cấu hình để chạy được
 
-### 3.2 Cấu hình backend
-
-1. Trong `backend/.env` đặt `DEVICE_API_KEY` (vd. `farm-secret-123`).
-2. Trong sketch ESP32 (`esp32_master_example.ino`):
-   - `BASE` = `http://<IP-máy-chạy-backend>:4000` (KHÔNG dùng `localhost`).
-   - `APIKEY` = đúng giá trị `DEVICE_API_KEY`.
+1. `backend/.env` — chép từ `.env.example`, **chạy được ngay không cần sửa**
+   (`DEVICE_API_KEY` đã khớp sẵn với firmware).
+2. `firmware/esp32_master/esp32_master.ino` — sửa **đúng 3 dòng** ở khối cấu hình
+   đầu file:
+   - `ssid` / `password` — WiFi của bạn
+   - `BACKEND_BASE` = `http://<IP-máy-chạy-backend>:4000` (**KHÔNG** dùng `localhost`)
 3. Máy chạy backend và ESP32 phải **cùng mạng WiFi/LAN**.
-4. Mở port 4000 trên firewall nếu cần.
+4. Mở cổng 4000 trên tường lửa.
 
 ---
 
@@ -273,7 +283,7 @@ cho tới khi hết lỗi hoặc quá `ALERT_REPEAT_SECONDS` (mặc định 10 p
 thì cứ 5 giây lại có thêm một cảnh báo giống hệt.
 
 Giá trị trong `.env` chỉ dùng để **khởi tạo lần đầu**; sau đó chỉnh trực tiếp
-trong trang **Cài đặt & Tự động** (lưu vào DB).
+trong trang **SETTINGS** (lưu vào DB).
 
 ### WebSocket (Socket.IO, real-time)
 Frontend tự lắng nghe các event:
@@ -367,23 +377,26 @@ không dùng làm màu chuỗi, và trạng thái luôn kèm biểu tượng + c
 ## 6. Còn lại / có thể làm tiếp
 
 - ✅ ~~Đăng nhập / phân quyền~~ → 3 vai trò admin/technician/viewer.
-- ✅ ~~Logic AUTO~~ → cấu hình luật trong trang **Cài đặt & Tự động**; luật có thể
+- ✅ ~~Logic AUTO~~ → cấu hình luật trong trang **SETTINGS**; luật có thể
   dựa trên cả **mực nước bồn (%)** và NPK, không chỉ nhiệt độ/độ ẩm.
-- ✅ ~~Khớp dữ liệu firmware~~ → NPK + 4 siêu âm + trạng thái Modbus đã thông suốt
-  từ `main.cpp` đến dashboard.
+- ✅ ~~Khớp dữ liệu firmware~~ → NPK + 4 siêu âm + không khí + mưa + trạng thái
+  Modbus đã thông suốt từ STM32 qua LoRa, qua ESP32, tới dashboard.
 - ✅ ~~Giao diện 5 trang theo thiết kế~~ → Menu/Dashboard/Control/Settings/About,
   vừa khít màn 1024×600.
-- ⬜ **Firmware chưa đọc cảm biến không khí + mưa.** Backend, API và 3 thẻ trên
-  dashboard đã sẵn sàng; còn thiếu phần đọc DHT22/SHT31 + board cảm biến mưa
-  trong `testcode/src/main.cpp` và 3 trường tương ứng trong `sendUplink()`.
-- ⬜ **5 bơm mới chỉ có ở phần mềm.** Backend và trang CONTROL đã điều khiển được
-  `pump1..pump5`, nhưng ESP32 cần đấu đủ 5 relay và hiện thực `driveRelay()` cho
-  từng id thì lệnh mới ra tới phần cứng.
-- ⬜ **Chưa build thử firmware**: máy này chưa cài PlatformIO nên phần sửa
-  `testcode/src/main.cpp` mới chỉ được rà soát thủ công. Chạy `pio run` một lần
-  trước khi nạp chip.
-- ⬜ Nếu muốn chạy AUTO **ngay trên STM32/ESP32** thay vì backend: cho ESP32 đọc
-  `/api/config` rồi tự quyết định — phần cứng sẽ vẫn hoạt động khi mất mạng.
+- ✅ ~~Nối firmware vào API~~ → `firmware/esp32_master/` đã cắm sẵn khóa API, chỉ
+  cần sửa 3 dòng (WiFi + IP backend) là chạy.
+- ✅ ~~AUTO chạy được khi mất mạng~~ → ESP32 có sẵn state machine tưới và pha phân
+  chạy tại chỗ, không phụ thuộc backend.
+- ⬜ **Cảm biến không khí + mưa chưa đọc thật.** Gói LoRa đã có sẵn 3 trường, chỉ
+  còn thay hàm `readAirSensors()` trong `firmware/stm32_sensor_node/src/main.cpp`
+  (hiện gán cứng `32.5 / 70.0 / 15`) bằng lệnh đọc DHT22/SHT31 + board mưa.
+- ⬜ **Bơm 2–5 chưa đấu relay.** Backend, trang CONTROL, ESP32 và Nano đã điều
+  khiển được `pump1..pump5`; chỉ còn đấu dây relay thật ở tủ điện.
+- ⬜ **Ánh xạ `Dist3`/`Dist4` đang mâu thuẫn** giữa chú thích STM32, thứ tự Nextion
+  và logic pha phân của ESP32 — cần đo dây thật rồi thống nhất. Xem cảnh báo cuối
+  [HUONG-DAN-CHAY-THAT.md](HUONG-DAN-CHAY-THAT.md).
+- ⬜ **Chưa biên dịch thử firmware**: máy dựng bản này không có PlatformIO lẫn
+  Arduino CLI, nên phần sửa trong `firmware/` mới chỉ được rà tay. Bấm
+  Verify/`pio run` một lần trước khi nạp chip.
 - ⬜ Triển khai: máy nội bộ, VPS, hay cloud free (Render/Railway)? → viết hướng
   dẫn deploy + Dockerfile nếu cần.
-```
