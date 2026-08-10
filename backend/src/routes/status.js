@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { asyncH } from '../middleware.js';
+import { asyncH, deviceOrUserAuth } from '../middleware.js';
 import { requireAuth, canControl } from '../auth.js';
 import {
   getStatus,
@@ -21,9 +21,11 @@ const asBool = (v) => {
 };
 
 // System status: master/slave online, LoRa RSSI, operating mode.
+// Readable by a logged-in browser OR by the ESP32 with its device key — the
+// master polls this to find out the web engaged the emergency stop.
 statusRouter.get(
   '/',
-  requireAuth,
+  deviceOrUserAuth,
   asyncH((req, res) => {
     res.json(getStatus());
   })

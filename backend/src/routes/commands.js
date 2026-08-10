@@ -15,9 +15,15 @@ commandsRouter.get(
     touchMaster();
     sweepCommands();
 
+    // ?limit=1 lets a master that can only execute one command at a time (the
+    // ESP32 waits for the Nano's LoRa ACK before sending the next) take exactly
+    // what it can act on. Without it every queued command is marked 'sent' and
+    // the unexecuted ones only come back after the retry timeout.
+    const limit = Math.max(1, Math.min(Number(req.query.limit) || 100, 100));
+
     const pending = db
-      .prepare(`SELECT * FROM commands WHERE status = 'pending' ORDER BY id ASC`)
-      .all();
+      .prepare(`SELECT * FROM commands WHERE status = 'pending' ORDER BY id ASC LIMIT ?`)
+      .all(limit);
     if (pending.length) {
       const ids = pending.map((c) => c.id);
       db.prepare(

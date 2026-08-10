@@ -72,8 +72,14 @@ Code dùng SQL chuẩn nên nâng lên PostgreSQL sau này khá dễ (đổi dri
 ---
 
 > 🔌 **Muốn nối thiết bị thật để đo ngoài đồng?**
-> Xem [**HUONG-DAN-CHAY-THAT.md**](HUONG-DAN-CHAY-THAT.md) — hướng dẫn từng bước
-> từ đấu dây, nạp firmware, hiệu chuẩn bồn nước đến xử lý lỗi RS485.
+>
+> - 📄 [**HUONG-DAN-TRIEN-KHAI.docx**](HUONG-DAN-TRIEN-KHAI.docx) — bản Word 9 trang:
+>   **bảng tra biến cấu hình theo từng máy**, các bước chạy, nghiệm thu, lỗi thường gặp.
+> - 📟 [**firmware/README.md**](firmware/README.md) — nạp 3 board, ánh xạ thiết bị,
+>   những gì cầu nối web làm.
+> - 🔧 [**HUONG-DAN-CHAY-THAT.md**](HUONG-DAN-CHAY-THAT.md) — đấu dây chi tiết và
+>   xử lý lỗi RS485.
+>
 > Phần dưới đây chỉ để chạy thử phần mềm khi chưa có phần cứng.
 
 ---
@@ -305,10 +311,28 @@ lora_project/
 │       ├── pages/            # Login, Dashboard, Settings, Users
 │       └── components/       # MetricCards, TankLevels, NpkPanel, RealtimeCharts,
 │                             # StatusPanel, RecentTable, AlertsList, Sparkline, ...
-├── testcode/                 # firmware STM32F411 (PlatformIO)
-│   └── src/main.cpp          #   Modbus RS485 + 4 siêu âm + LCD + sendUplink()
-└── esp32_master_example.ino  # cầu nối UART -> WiFi -> backend
+├── firmware/                 # 3 board thật, đã cấu hình sẵn để tải về là chạy
+│   ├── stm32_sensor_node/    #   STM32F411 — cảm biến + LCD, phát LoRa E32
+│   ├── esp32_master/         #   ESP32-S3 — Nextion + logic AUTO + CẦU NỐI WEB
+│   ├── nano_relay/           #   Arduino Nano — 10 relay (5 bơm, 4 van)
+│   └── README.md
+├── front_require/            # ảnh thiết kế HMI gốc của nhóm (tham chiếu)
+├── testcode/                 # bản STM32 cũ, giữ để đối chiếu
+└── esp32_master_example.ino  # sketch mẫu tối giản (bản đầy đủ ở firmware/)
 ```
+
+### Firmware đã nối sẵn vào API
+
+`firmware/esp32_master/` là bản **đã cắm sẵn khóa API**, chỉ cần sửa 3 dòng
+(tên WiFi, mật khẩu WiFi, IP máy chạy backend) là chạy được ngay:
+
+| Sự kiện | ESP32 gọi API nào |
+|---|---|
+| Nhận gói LoRa từ STM32 | `POST /api/telemetry` (đủ 14 trường) |
+| Mỗi 3 giây | `GET /api/commands/pending?limit=1` → dịch thành `<ONn>`/`<OFFn>` |
+| Nano xác nhận xong | `POST /api/commands/{id}/ack` |
+| Bấm nút cơ dưới tủ điện | `POST /api/devices/state` |
+| Web bấm DỪNG KHẨN CẤP | `GET /api/status` thấy `eStop` → phát `<ESTOP>` |
 
 ---
 
