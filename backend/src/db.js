@@ -52,7 +52,9 @@ db.exec(`
   -- Single-row system status table (id is always 1)
   CREATE TABLE IF NOT EXISTS system_status (
     id              INTEGER PRIMARY KEY CHECK (id = 1),
-    mode            TEXT NOT NULL DEFAULT 'AUTO',   -- AUTO | MANUAL
+    -- Fail-safe: a fresh rig comes up in MANUAL. AUTO drives real pumps, so it
+    -- has to be an explicit choice by an operator, never a default.
+    mode            TEXT NOT NULL DEFAULT 'MANUAL',  -- AUTO | MANUAL
     slave_online    INTEGER NOT NULL DEFAULT 0,
     lora_rssi       INTEGER,
     master_seen_at  TEXT,
@@ -227,6 +229,21 @@ if (Number(getMeta('schema_version') || 1) < 5) {
   setMeta('schema_version', 5);
 }
 
+// v6: a fresh install used to come up in AUTO, which meant the automation engine
+// was armed before anyone asked for it. AUTO commands real pumps and valves, so
+// it must be a deliberate choice. Flip existing databases over to MANUAL once.
+// Unconditional on purpose: MANUAL is the fail-safe direction, and there is no
+// way to tell "never touched" from "deliberately set to AUTO" in the stored row.
+// An operator who wants AUTO back just presses TỰ ĐỘNG on the CONTROL screen.
+if (Number(getMeta('schema_version') || 1) < 6) {
+  const flipped = db
+    .prepare(`UPDATE system_status SET mode = 'MANUAL' WHERE id = 1 AND mode <> 'MANUAL'`)
+    .run();
+  if (flipped.changes > 0)
+    console.log(`[db] migrated: chế độ mặc định AUTO -> THỦ CÔNG (bật AUTO bằng tay khi cần)`);
+  setMeta('schema_version', 6);
+}
+
 // --- Seed default rows if missing -------------------------------------------
 // Five pumps and four valves, matching the relay board on the panel drawing.
 const defaultDevices = [
@@ -247,7 +264,7 @@ const insertDevice = db.prepare(
 for (const d of defaultDevices) insertDevice.run(d.id, d.name);
 
 db.prepare(
-  `INSERT OR IGNORE INTO system_status (id, mode, slave_online) VALUES (1, 'AUTO', 0)`
+  `INSERT OR IGNORE INTO system_status (id, mode, slave_online) VALUES (1, 'MANUAL', 0)`
 ).run();
 
 // Default admin user (only if no users exist yet)
