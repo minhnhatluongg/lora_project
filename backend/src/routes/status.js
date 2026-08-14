@@ -5,6 +5,8 @@ import {
   getStatus,
   setMode,
   enqueueCommand,
+  enqueueAllDevices,
+  PANEL_STAGGER_SECONDS,
   setEmergencyStop,
   isEStopEngaged,
 } from '../services.js';
@@ -51,7 +53,27 @@ statusRouter.post(
         eStop: true,
       });
 
-    enqueueCommand('mode', mode);
+    // Picking AUTO energises the whole panel — valves first, two seconds apart —
+    // and only then hands control over.
+    //
+    // The ORDER is load-bearing: nano_relay.ino refuses every manual ON once it
+    // is already in AUTO ("KHÓA AN TOÀN"), and esp32_master.ino rejects them one
+    // step earlier for the same reason. Queued after the mode change these nine
+    // commands would all come back refused; queued ahead of it they are still
+    // seen as manual presses and are applied.
+    //
+    // Being last in the queue is not enough on its own: a master polling with a
+    // high ?limit would collect the mode change in the same batch as the first
+    // pump. So the mode command gets a run_after one step past the final
+    // actuator, which orders it in TIME as well as in id.
+    let modeDelay = 0;
+    if (mode === 'AUTO') {
+      modeDelay =
+        enqueueAllDevices('ON', { staggerSeconds: PANEL_STAGGER_SECONDS }) +
+        PANEL_STAGGER_SECONDS;
+    }
+
+    enqueueCommand('mode', mode, { delaySeconds: modeDelay });
     setMode(mode);
     res.json(getStatus());
   })

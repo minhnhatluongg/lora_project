@@ -293,14 +293,20 @@ export function Control() {
   }, [estopEngaged]);
 
   // Why the outputs are locked, in priority order — an operator should never
-  // have to guess which of the three reasons is in force.
+  // have to guess which of the four reasons is in force. MANUAL is the only
+  // state that hands over the switches; everything else, including "no mode
+  // picked yet", leaves them dead.
   const lockReason = estopEngaged
     ? 'ĐANG DỪNG KHẨN CẤP — mọi bơm và van bị khoá cho tới khi giải trừ.'
     : readOnly
       ? 'Tài khoản chỉ có quyền xem — không thể điều khiển thiết bị.'
       : mode === 'AUTO'
         ? 'Đang ở chế độ TỰ ĐỘNG — chuyển sang THỦ CÔNG để bật/tắt tay.'
-        : null;
+        : mode === 'MANUAL'
+          ? null
+          : !status
+            ? 'Chưa đọc được chế độ từ máy chủ.'
+            : 'Chưa chọn chế độ — hãy chọn THỦ CÔNG hoặc TỰ ĐỘNG ở trên.';
   const locked = !!lockReason;
 
   const byId = useMemo(() => {
@@ -428,12 +434,14 @@ export function Control() {
     : estopEngaged
       ? 'Không thể bật TỰ ĐỘNG cho tới khi giải trừ dừng khẩn cấp.'
       : mode === 'AUTO'
-        ? 'Hệ thống chạy theo ngưỡng đã cài trong CÀI ĐẶT.'
+        ? 'Đã bật toàn bộ bơm và van, sau đó hệ thống chạy theo ngưỡng trong CÀI ĐẶT.'
         : mode === 'MANUAL'
           ? 'Bạn bật/tắt từng bơm và van bằng tay.'
           : loading
             ? 'Đang đọc chế độ từ máy chủ…'
-            : 'Chưa đọc được chế độ từ máy chủ.';
+            : !status
+              ? 'Chưa đọc được chế độ từ máy chủ.'
+              : 'Chưa chọn chế độ — mọi bơm và van đang khoá. Chọn một chế độ để bắt đầu.';
 
   const estopLabel = estopEngaged
     ? 'ĐANG DỪNG KHẨN CẤP — BẤM ĐỂ GIẢI TRỪ'
