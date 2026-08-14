@@ -21,8 +21,15 @@ commandsRouter.get(
     // the unexecuted ones only come back after the retry timeout.
     const limit = Math.max(1, Math.min(Number(req.query.limit) || 100, 100));
 
+    // run_after holds a command back without taking it out of the queue, so a
+    // whole-panel switch-on arrives spread over time however fast the master
+    // polls and whatever limit it asks for.
     const pending = db
-      .prepare(`SELECT * FROM commands WHERE status = 'pending' ORDER BY id ASC LIMIT ?`)
+      .prepare(
+        `SELECT * FROM commands
+         WHERE status = 'pending' AND (run_after IS NULL OR run_after <= datetime('now'))
+         ORDER BY id ASC LIMIT ?`
+      )
       .all(limit);
     if (pending.length) {
       const ids = pending.map((c) => c.id);

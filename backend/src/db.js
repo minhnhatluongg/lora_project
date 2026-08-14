@@ -52,9 +52,11 @@ db.exec(`
   -- Single-row system status table (id is always 1)
   CREATE TABLE IF NOT EXISTS system_status (
     id              INTEGER PRIMARY KEY CHECK (id = 1),
-    -- Fail-safe: a fresh rig comes up in MANUAL. AUTO drives real pumps, so it
-    -- has to be an explicit choice by an operator, never a default.
-    mode            TEXT NOT NULL DEFAULT 'MANUAL',  -- AUTO | MANUAL
+    -- Fail-safe: a fresh rig comes up with NO mode picked, which locks every
+    -- output. Both AUTO and MANUAL drive real pumps, so running the panel is
+    -- always an explicit choice by an operator, never a default. Mirrors
+    -- esp32_master.ino, where systemMode starts at -1 ("chưa chọn").
+    mode            TEXT NOT NULL DEFAULT 'NONE',    -- NONE | AUTO | MANUAL
     slave_online    INTEGER NOT NULL DEFAULT 0,
     lora_rssi       INTEGER,
     master_seen_at  TEXT,
@@ -75,6 +77,10 @@ db.exec(`
     status      TEXT NOT NULL DEFAULT 'pending',
     attempts    INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    -- Earliest moment this may be handed to the master. NULL = right away.
+    -- Lets a batch be spread over time (see enqueueAllDevices) instead of
+    -- hitting the panel with nine simultaneous relay closures.
+    run_after   TEXT,
     sent_at     TEXT,
     acked_at    TEXT
   );
@@ -244,6 +250,35 @@ if (Number(getMeta('schema_version') || 1) < 6) {
   setMeta('schema_version', 6);
 }
 
+// v7: mode gained a third value. v6 parked everyone in MANUAL, but MANUAL still
+// hands an operator live ON/OFF switches the moment the screen opens. 'NONE'
+// means nobody has picked yet and every output stays locked until they do —
+// the same three-state model esp32_master.ino already uses (-1 / 0 / 1).
+// Unconditional for the same reason as v6: 'NONE' is the fail-safe direction
+// and a stored row cannot tell a deliberate choice from a leftover default.
+if (Number(getMeta('schema_version') || 1) < 7) {
+  const cleared = db
+    .prepare(`UPDATE system_status SET mode = 'NONE' WHERE id = 1 AND mode <> 'NONE'`)
+    .run();
+  if (cleared.changes > 0)
+    console.log(`[db] migrated: bỏ chọn chế độ (NONE) — chọn THỦ CÔNG hoặc TỰ ĐỘNG để mở khoá`);
+  setMeta('schema_version', 7);
+}
+
+// v8: commands gained run_after so a batch can be spread out in time. Existing
+// databases need the column added; every row already in the queue keeps NULL,
+// which means "no delay" — identical to the old behaviour.
+if (Number(getMeta('schema_version') || 1) < 8) {
+  const hasColumn = db
+    .prepare(`SELECT 1 FROM pragma_table_info('commands') WHERE name = 'run_after'`)
+    .get();
+  if (!hasColumn) {
+    db.prepare(`ALTER TABLE commands ADD COLUMN run_after TEXT`).run();
+    console.log(`[db] migrated: thêm cột commands.run_after (giãn cách lệnh theo thời gian)`);
+  }
+  setMeta('schema_version', 8);
+}
+
 // --- Seed default rows if missing -------------------------------------------
 // Five pumps and four valves, matching the relay board on the panel drawing.
 const defaultDevices = [
@@ -264,7 +299,7 @@ const insertDevice = db.prepare(
 for (const d of defaultDevices) insertDevice.run(d.id, d.name);
 
 db.prepare(
-  `INSERT OR IGNORE INTO system_status (id, mode, slave_online) VALUES (1, 'MANUAL', 0)`
+  `INSERT OR IGNORE INTO system_status (id, mode, slave_online) VALUES (1, 'NONE', 0)`
 ).run();
 
 // Default admin user (only if no users exist yet)

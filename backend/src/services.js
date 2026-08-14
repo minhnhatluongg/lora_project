@@ -73,6 +73,31 @@ export function setMode(mode) {
   emit(EVENTS.STATUS, getStatus());
 }
 
+// Seconds between two actuators when the whole panel is switched on at once.
+// Five pump motors closing together is an inrush the panel should never have to
+// swallow, and the relay board's supply is shared.
+export const PANEL_STAGGER_SECONDS = 2;
+
+// Queue the same action for every actuator on the panel.
+//
+// Valves are always ordered BEFORE pumps. That mirrors the AUTO state machine in
+// esp32_master.ino (AUTO_OPEN_VALVE -> wait -> AUTO_START_PUMP): a pump started
+// against a shut valve is dead-heading into a closed line.
+//
+// staggerSeconds spreads the batch out. It is 0 for the emergency stop on
+// purpose — cutting power is the one case that must happen all at once.
+// Returns the delay given to the LAST command, so a caller can queue a
+// follow-up that lands after the whole batch has been applied.
+export function enqueueAllDevices(action, { staggerSeconds = 0 } = {}) {
+  const present = new Set(db.prepare(`SELECT id FROM devices`).all().map((r) => r.id));
+  const ordered = [...VALVE_IDS, ...PUMP_IDS].filter((id) => present.has(id));
+  // Anything the operator added by hand still gets switched, just last.
+  for (const id of present) if (!ordered.includes(id)) ordered.push(id);
+
+  ordered.forEach((id, i) => enqueueCommand(id, action, { delaySeconds: i * staggerSeconds }));
+  return ordered.length ? (ordered.length - 1) * staggerSeconds : 0;
+}
+
 // ---- Emergency stop --------------------------------------------------------
 export function isEStopEngaged() {
   return !!db.prepare(`SELECT e_stop FROM system_status WHERE id = 1`).get()
@@ -93,9 +118,7 @@ export function setEmergencyStop(engaged, actor = 'người dùng') {
   );
 
   if (engaged) {
-    for (const { id } of db.prepare(`SELECT id FROM devices`).all()) {
-      enqueueCommand(id, 'OFF');
-    }
+    enqueueAllDevices('OFF');
     enqueueCommand('mode', 'MANUAL');
     setMode('MANUAL');
     createAlert(
@@ -141,15 +164,20 @@ const LIVE_COMMAND_STATUSES = `('pending', 'sent')`;
 
 // Queue a command, replacing anything still outstanding for the same device.
 // Pressing ON then OFF must leave ONE instruction, not two that replay in order.
-export function enqueueCommand(deviceId, action) {
+// delaySeconds holds the command back in the queue: it is 'pending' but the
+// master is not offered it until then. Used to stagger a whole-panel switch-on.
+export function enqueueCommand(deviceId, action, { delaySeconds = 0 } = {}) {
   db.prepare(
     `UPDATE commands SET status = 'superseded'
      WHERE device_id = ? AND status IN ${LIVE_COMMAND_STATUSES}`
   ).run(deviceId);
 
   const info = db
-    .prepare(`INSERT INTO commands (device_id, action) VALUES (?, ?)`)
-    .run(deviceId, action);
+    .prepare(
+      `INSERT INTO commands (device_id, action, run_after)
+       VALUES (?, ?, CASE WHEN ? > 0 THEN datetime('now', ?) ELSE NULL END)`
+    )
+    .run(deviceId, action, delaySeconds, `+${delaySeconds} seconds`);
   return db.prepare(`SELECT * FROM commands WHERE id = ?`).get(info.lastInsertRowid);
 }
 
