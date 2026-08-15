@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { asyncH } from '../middleware.js';
+import { asyncH, deviceAuth } from '../middleware.js';
 import { requireAuth, canConfig } from '../auth.js';
 import { getConfig, setConfig } from '../services.js';
 
@@ -53,5 +53,54 @@ configRouter.put(
       automation: mergeEntries(current.automation, body.automation),
     };
     res.json(setConfig(next));
+  })
+);
+
+// POST /api/config/thresholds -> the ESP32 reporting the ten values an operator
+// just entered on the Nextion, so the web SETTINGS screen shows what the panel
+// is actually running on rather than a stale copy.
+//
+// Device-authenticated (x-api-key): the master has no user account. It sends a
+// FLAT body with the firmware's own names, which differ from ours in three
+// places, hence the explicit mapping rather than a spread:
+//
+//     humMin/humMax  -> thresholds.humidityMin/humidityMax
+//     timeBom        -> irrigation.runMinutes
+//     timeNghi       -> irrigation.restMinutes
+//
+// EC needs no conversion: the sketch compares ecMin/ecMax against the raw
+// EC_Value from the RS485 probe, which is µS/cm — the same unit we store.
+//
+// Every field is optional. A key that is absent or unusable leaves the stored
+// value alone, so a partial or half-garbled packet can never blank the config.
+const THRESHOLD_FIELDS = {
+  phMin: 'phMin',
+  phMax: 'phMax',
+  ecMin: 'ecMin',
+  ecMax: 'ecMax',
+  tempMin: 'tempMin',
+  tempMax: 'tempMax',
+  humMin: 'humidityMin',
+  humMax: 'humidityMax',
+};
+
+configRouter.post(
+  '/thresholds',
+  deviceAuth,
+  asyncH((req, res) => {
+    const body = req.body || {};
+    const current = getConfig();
+
+    const thresholds = { ...current.thresholds };
+    for (const [from, to] of Object.entries(THRESHOLD_FIELDS)) {
+      const n = Number(body[from]);
+      if (Number.isFinite(n)) thresholds[to] = n;
+    }
+
+    const irrigation = { ...current.irrigation };
+    irrigation.runMinutes = minutes(body.timeBom, irrigation.runMinutes);
+    irrigation.restMinutes = minutes(body.timeNghi, irrigation.restMinutes);
+
+    res.json(setConfig({ ...current, thresholds, irrigation }));
   })
 );
