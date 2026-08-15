@@ -51,6 +51,10 @@ unsigned long lastUpdate = 0;
 int systemMode = -1;  // -1: Chưa chọn | 0: Manual | 1: Auto
 
 // ---> BIẾN LƯU TRẠNG THÁI BƠM/VAN <---
+// Trạng thái DỪNG KHẨN CẤP mà web đang yêu cầu — giữ lại để chỉ phát <ESTOP>
+// một lần ở cạnh lên, thay vì mỗi lần hỏi /api/status.
+bool webEStopEngaged = false;
+
 bool pumpState[5]  = { false, false, false, false, false };
 bool valveState[4] = { false, false, false, false };
 bool bom1State = false; // Giữ lại cho tương thích code cũ
@@ -73,7 +77,7 @@ uint16_t Potassium = 0;
 float Dist1 = 0.0;
 float Dist2 = 0.0;
 float Dist3 = 0.0;
-float Dist4 = 0.0;  // Khoảng cách bồn nước (Dist4 > 80cm là CẠN)
+float Dist4 = 0.0;  // Bồn TRỘN — ánh xạ chốt theo dây: Dist3 = Nước, Dist4 = Trộn
 
 // ---> BỔ SUNG BIẾN CẢM BIẾN MƯA & KHÔNG KHÍ <---
 int RainPercent = 0;  // % Mưa (0% = Khô, 100% = Mưa to)
@@ -81,8 +85,27 @@ float AirTemp = 0.0;  // Nhiệt độ không khí (°C)
 float AirHum = 0.0;   // Độ ẩm không khí (%)
 
 // --- NGƯỠNG CÀI ĐẶT ---
+// ecMin/ecMax tính bằng µS/cm — CÙNG ĐƠN VỊ với EC_Value mà đầu dò RS485 trả
+// về, và cùng đơn vị backend lưu. Trước đây hai biến này mặc định 1.0 và 2.0
+// (tức mS/cm) rồi đem so thẳng với EC_Value cỡ 1500, nên "EC_Value > ecMax"
+// luôn đúng: máy pha phân kẹt vĩnh viễn ở bước châm thêm nước, không bao giờ
+// bật isMixingReady, và do đó tưới tự động không bao giờ khởi động.
 float phMin, phMax, ecMin, ecMax, tempMin, tempMax, humMin, humMax;
 int timeBom, timeNghi;                // Đơn vị: Phút
+
+// Ngưỡng EC mặc định, đổi ở đây nếu nhóm nông học chốt số khác.
+const float EC_MIN_DEFAULT = 1000.0;  // = 1.0 mS/cm
+const float EC_MAX_DEFAULT = 2000.0;  // = 2.0 mS/cm
+
+// Nhận số EC ở bất kỳ đơn vị nào rồi trả về µS/cm.
+//
+// Cần vì hai đường: chip đã nạp firmware cũ còn giữ 1.0/2.0 trong Flash, và
+// người vận hành quen tay có thể gõ "1.5" trên màn Nextion. Không có dung dịch
+// tưới thật nào chỉ 50 µS/cm (gần bằng nước cất), nên dưới ngưỡng đó chắc chắn
+// là người ta đang nói mS/cm. Backend cũng dùng đúng phép suy luận này.
+float ecToMicro(float v) {
+  return (v > 0.0 && v < 50.0) ? v * 1000.0 : v;
+}
 const float WATER_EMPTY_DIST = 80.0;  // Ngưỡng cạn bồn nước (cm)
 const int RAIN_MAX_PERCENT = 50;      // Ngưỡng mưa to dừng tưới (%)
 
@@ -272,7 +295,7 @@ void handleAutoMixingLogic() {
       break;
 
     case MIX_ADD_WATER:
-      // Dist3 là cảm biến siêu âm bồn Trộn (khoảng cách > 50cm là cạn, cần bơm)
+      // Dist4 là cảm biến siêu âm bồn TRỘN (khoảng cách > 50cm là cạn, cần bơm)
       if (Dist4 > 50.0 && Dist4 != -1.0) {
         sendLoRaCommand("<ON3>");  // BẬT BƠM 3 (HÚT NƯỚC)
       } else {
@@ -527,6 +550,40 @@ void pushDeviceStateToWeb() {
   http.POST(body);
   http.end();
 }
+// Đọc /api/status để biết web có đang bấm DỪNG KHẨN CẤP không.
+//
+// Không đi qua hàng đợi lệnh: dừng khẩn cấp phải tới nơi kể cả khi hàng đợi
+// đang tắc hay ESP32 vừa khởi động lại. Một gói <ESTOP> cắt sạch 10 relay.
+void syncEStopFromBackend() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  HTTPClient http;
+  beginRequest(http, "/api/status");
+  int code = http.GET();
+  if (code == 200) {
+    StaticJsonDocument<512> doc;
+    if (deserializeJson(doc, http.getString()) == DeserializationError::Ok) {
+      bool engaged = doc["eStop"] | false;
+      // Chỉ hành động ở cạnh lên/xuống, không phát <ESTOP> mỗi 3 giây.
+      if (engaged && !webEStopEngaged) {
+        Serial.println(">> [WEB] DỪNG KHẨN CẤP — cắt toàn bộ relay");
+        sendLoRaCommand("<ESTOP>");
+        for (int i = 0; i < 5; i++) pumpState[i] = false;
+        for (int i = 0; i < 4; i++) valveState[i] = false;
+        bom1State = false;
+        van1State = false;
+        autoState = AUTO_IDLE;
+        mixState  = MIX_IDLE;
+        systemMode = 0;
+        updateOLED("DUNG KHAN CAP", "Lenh tu Web");
+        updateDashboard();
+      }
+      webEStopEngaged = engaged;
+    }
+  }
+  http.end();
+}
+
 void pollWebCommands() {
   // Chỉ hỏi lệnh khi WiFi ổn định và LoRa đang KHÔNG bận chờ ACK
   if (WiFi.status() != WL_CONNECTED || isWaitingAck) return;
@@ -562,8 +619,22 @@ void pollWebCommands() {
       } 
       else if (devId == "mode") {
         systemMode = (action == "AUTO") ? 1 : 0;
-        bom1State = false; 
+        bom1State = false;
         van1State = false;
+        // Nano phải biết để bật/tắt KHÓA AN TOÀN của nó, nếu không nút cơ dưới
+        // tủ vẫn bấm được trong khi web tưởng đang ở TỰ ĐỘNG.
+        sendLoRaCommand("<SET_MODE=" + action + ">");
+        sendValue("page3.bt10.val", systemMode == 1 ? 1 : 0);
+        sendValue("page3.bt9.val",  systemMode == 1 ? 0 : 1);
+      }
+
+      // Ở TỰ ĐỘNG, Nano từ chối mọi lệnh tay ("KHÓA AN TOÀN" trong nano_relay).
+      // Nếu vẫn gửi rồi báo thành công thì dashboard sẽ vẽ một cái bơm ĐANG BẬT
+      // mà ngoài đồng không hề chạy. Báo hỏng để backend giữ nguyên trạng thái.
+      if (relayPin != -1 && systemMode == 1) {
+        Serial.println("     -> đang ở TỰ ĐỘNG, từ chối lệnh tay từ web");
+        ackWebCommand(id, false);
+        continue;
       }
 
       // ---> LUẬT ĐỒNG BỘ: CẬP NHẬT TRẠNG THÁI RA MÀN NEXTION NGAY LẬP TỨC <---
@@ -630,21 +701,26 @@ void setup() {
   while (nextion.available()) nextion.read();
 
   // --- ĐỌC MẬT KHẨU TỪ FLASH ---
+  // end() must come AFTER the last read. Closing here (as this block used to)
+  // left every getFloat below reading a shut handle, so the ten thresholds an
+  // operator saved on the Nextion silently reverted to these defaults on every
+  // boot. The save path further down already gets this right.
   preferences.begin("system_data", false);
   systemPassword = preferences.getString("password", "123456");
-  preferences.end();
   Serial.println(">> [PREFERENCES] Mật khẩu hệ thống hiện tại: " + systemPassword);
 
   phMin = preferences.getFloat("phMin", 5.5);
   phMax = preferences.getFloat("phMax", 6.5);
-  ecMin = preferences.getFloat("ecMin", 1.0);
-  ecMax = preferences.getFloat("ecMax", 2.0);
+  // ecToMicro: chip từng nạp firmware cũ còn giữ 1.0/2.0 trong Flash.
+  ecMin = ecToMicro(preferences.getFloat("ecMin", EC_MIN_DEFAULT));
+  ecMax = ecToMicro(preferences.getFloat("ecMax", EC_MAX_DEFAULT));
   tempMin = preferences.getFloat("tempMin", 20.0);
   tempMax = preferences.getFloat("tempMax", 35.0);
   humMin = preferences.getFloat("humMin", 50.0);
   humMax = preferences.getFloat("humMax", 75.0);
   timeBom = preferences.getInt("timeBom", 5);
   timeNghi = preferences.getInt("timeNghi", 10);
+  preferences.end();
 
   WiFi.begin(ssid, password);
   updateOLED("WIFI", "Connecting...");
@@ -777,6 +853,9 @@ void loop() {
   }
     if (millis() - lastWebPoll >= 3000) {
     lastWebPoll = millis();
+    // Dừng khẩn cấp phải được kiểm TRƯỚC khi nhận lệnh mới — nếu web vừa bấm
+    // cắt thì không có lý gì đi bật thêm một relay nữa trong cùng vòng quét.
+    syncEStopFromBackend();
     pollWebCommands();
     }
   if (millis() - lastStatePush >= STATE_PUSH_INTERVAL) {
@@ -790,7 +869,10 @@ void loop() {
     if (nextion.available()) {
       String cmd = nextion.readStringUntil('\n');
       cmd.trim();
-      if (cmd.length() == 0) return;
+      // Was `return`, which bailed out of loop() entirely — one stray byte from
+      // the Nextion skipped the LoRa retry block further down. Skip the byte,
+      // not the rest of the cycle.
+      if (cmd.length() > 0) {
 
       String cmdUpper = cmd;
       cmdUpper.toUpperCase();
@@ -964,8 +1046,10 @@ void loop() {
 
         preferences.putFloat("phMin", getValue(data, ',', 0).toFloat());
         preferences.putFloat("phMax", getValue(data, ',', 1).toFloat());
-        preferences.putFloat("ecMin", getValue(data, ',', 2).toFloat());
-        preferences.putFloat("ecMax", getValue(data, ',', 3).toFloat());
+        // Quy về µS/cm ngay tại cửa vào, để Flash chỉ chứa một đơn vị duy nhất
+        // dù người vận hành gõ "1.5" hay "1500" trên màn Nextion.
+        preferences.putFloat("ecMin", ecToMicro(getValue(data, ',', 2).toFloat()));
+        preferences.putFloat("ecMax", ecToMicro(getValue(data, ',', 3).toFloat()));
         preferences.putFloat("tempMin", getValue(data, ',', 4).toFloat());
         preferences.putFloat("tempMax", getValue(data, ',', 5).toFloat());
         preferences.putFloat("humMin", getValue(data, ',', 6).toFloat());
@@ -1018,8 +1102,8 @@ void loop() {
         // 1. Lưu đè các thông số chuẩn Chôm Chôm vào Flash
         preferences.putFloat("phMin", 5.5);
         preferences.putFloat("phMax", 6.5);
-        preferences.putFloat("ecMin", 1.0);
-        preferences.putFloat("ecMax", 2.0);
+        preferences.putFloat("ecMin", EC_MIN_DEFAULT);
+        preferences.putFloat("ecMax", EC_MAX_DEFAULT);
         preferences.putFloat("tempMin", 22.0);
         preferences.putFloat("tempMax", 35.0);
         preferences.putFloat("humMin", 65.0);
@@ -1033,8 +1117,8 @@ void loop() {
         // 2. Cập nhật lại các biến đang chạy trong RAM
         phMin = 5.5;
         phMax = 6.5;
-        ecMin = 1.0;
-        ecMax = 2.0;
+        ecMin = EC_MIN_DEFAULT;
+        ecMax = EC_MAX_DEFAULT;
         tempMin = 22.0;
         tempMax = 35.0;
         humMin = 65.0;
@@ -1045,8 +1129,9 @@ void loop() {
         // 3. Gửi lệnh ép các ô chữ trên Nextion hiển thị số mới
         sendText("t0.txt", "5.5");
         sendText("t1.txt", "6.5");
-        sendText("t2.txt", "1.0");
-        sendText("t3.txt", "2.0");
+        // Cùng dạng với trang SETTINGS (String(ecMin, 1)), đơn vị µS/cm.
+        sendText("t2.txt", String(EC_MIN_DEFAULT, 1));
+        sendText("t3.txt", String(EC_MAX_DEFAULT, 1));
         sendText("t4.txt", "22.0");
         sendText("t5.txt", "35.0");
         sendText("t6.txt", "65.0");
@@ -1055,12 +1140,14 @@ void loop() {
         sendText("t9.txt", "15");
 
         // 4. Bắn một gói lệnh xuống cho STM32 / Nano
-        String defaultData = "5.5,6.5,1.0,2.0,22.0,35.0,65.0,80.0,10,15";
+        String defaultData = "5.5,6.5," + String(EC_MIN_DEFAULT, 1) + "," +
+                             String(EC_MAX_DEFAULT, 1) + ",22.0,35.0,65.0,80.0,10,15";
         sendLoRaCommand("<SET_DATA=" + defaultData + ">");
 
         Serial.println(">> [SYSTEM] Khôi phục thành công!");
       }
-    }  // <--- ĐÓNG NGOẶC HÀM nextion.available() Ở ĐÂY LÀ CHÍNH XÁC NHẤT!
+      }  // đóng if (cmd.length() > 0) — byte rác bị bỏ qua, không thoát loop()
+    }    // đóng if (nextion.available())
 
     // ===============================================================
     // --- 5. LORA RETRY CƠ CHẾ CHỜ PHẢN HỒI (ACK) TỪ NANO ---
