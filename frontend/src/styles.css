@@ -83,24 +83,21 @@ body {
    darkened family declared at the top of this file, so white-on-tile and the
    orange sub-line both clear AA on the near-white ground. */
 .pageshell-brandwrap { display: flex; align-items: center; gap: 22px; }
-.pageshell-brand { display: flex; flex-direction: column; gap: 4px; line-height: 1.2; }
+.pageshell-brand { display: flex; align-items: center; }
 
-.pageshell-brand-main {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 20px; font-weight: 800; letter-spacing: 0.3px;
+/* Logo thật, cao cố định và tự co ngang theo tỉ lệ 1260x428. Khoá chiều cao
+   thay vì chiều rộng để thanh tiêu đề không nhảy khi ảnh vừa tải xong. */
+.pageshell-logo {
+  height: 38px;
+  width: auto;
+  max-width: 100%;
+  display: block;
+  object-fit: contain;
 }
-.pageshell-fpt { display: inline-flex; align-items: center; gap: 2px; }
-.pageshell-fpt b {
-  display: inline-grid; place-items: center;
-  width: 1.08em; height: 1.16em;
-  border-radius: 3px;
-  color: #fff; font-size: 0.88em; font-weight: 800; line-height: 1;
+
+@media (max-width: 900px) {
+  .pageshell-logo { height: 30px; }
 }
-.pageshell-fpt-f { background: var(--blue); }
-.pageshell-fpt-p { background: #c2410c; }
-.pageshell-fpt-t { background: var(--green); }
-.pageshell-brand-edu { color: #1d4ed8; }
-.pageshell-brand-sub { font-size: 13px; font-weight: 700; color: #c2410c; letter-spacing: 0.9px; }
 
 /* The mark is drawn from three letter tiles, so the readable name is carried
    here for assistive tech. */

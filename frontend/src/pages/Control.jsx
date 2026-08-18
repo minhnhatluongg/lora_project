@@ -10,6 +10,7 @@ import {
   IconWarningSolid,
 } from '../components/Icons.jsx';
 import { api } from '../api.js';
+import { EngineFlow } from '../components/EngineFlow.jsx';
 import { socket, EVENTS } from '../socket.js';
 import { DEVICE_IDS, DEVICE_LABEL } from '../metrics.js';
 import { useAuth, can } from '../auth/AuthContext.jsx';
@@ -134,6 +135,19 @@ function DeviceCell({ device, kind, disabled, inhibited, pending, problem, hint,
   );
 }
 
+// Lịch quét toàn dàn, phải khớp enqueueAllDevices() dưới backend: van trước,
+// bơm sau, mỗi bước PANEL_STAGGER_SECONDS giây. Vẽ lại ở đây để nhãn nói được
+// đang tới thiết bị nào, thay vì một thanh chạy vô nghĩa.
+const SWEEP_STEP_SECONDS = 2;
+const SWEEP_ORDER = [...DEVICE_IDS.valves, ...DEVICE_IDS.pumps];
+
+function sweepLabel(elapsed) {
+  const i = Math.floor(elapsed / SWEEP_STEP_SECONDS);
+  if (i >= SWEEP_ORDER.length) return 'Đang chuyển giao…';
+  const id = SWEEP_ORDER[i];
+  return `Đang bật ${DEVICE_LABEL[id] || id}`;
+}
+
 // ---------------------------------------------------------------------------
 
 export function Control() {
@@ -151,6 +165,13 @@ export function Control() {
   const [hints, setHints] = useState({}); // deviceId -> neutral note
   const [modeBusy, setModeBusy] = useState(null);
   const [modeError, setModeError] = useState(null);
+  const [testBusy, setTestBusy] = useState(false);
+  const [testError, setTestError] = useState(null);
+  // Tiến trình quét toàn dàn: { total, elapsed } — null nghĩa là không chạy.
+  const [sweep, setSweep] = useState(null);
+  // Thông báo bật lên khi quét xong, tự tắt sau vài giây.
+  const [sweepDone, setSweepDone] = useState(null);
+  const sweepTimer = useRef(null);
 
   const [armed, setArmed] = useState(0); // seconds left on the e-stop arm
   const [estopBusy, setEstopBusy] = useState(false);
@@ -394,6 +415,68 @@ export function Control() {
     [readOnly, modeBusy, mode]
   );
 
+  // Quét toàn dàn: bật lần lượt từng thiết bị, van trước bơm sau, cách nhau 2
+  // giây. Đây chính là hành vi mà nút TỰ ĐỘNG từng làm ngầm; tách ra thành một
+  // hành động riêng thì nó trung thực về việc mình là bài kiểm tra, và có mặt
+  // đúng lúc cần — nghiệm thu đấu dây tủ điện trước khi giao cho AUTO.
+  // Lịch quét do backend quyết định và trả về `seconds`. Thanh tiến trình ở đây
+  // chỉ vẽ lại đúng lịch đó — van trước, bơm sau, mỗi bước PANEL_STAGGER giây —
+  // nên nhãn "đang tới thiết bị nào" luôn khớp với hàng đợi thật dưới máy chủ.
+  const runPanelTest = useCallback(async () => {
+    if (readOnly || testBusy || sweep) return;
+    setTestBusy(true);
+    setTestError(null);
+    setSweepDone(null);
+    try {
+      const res = await api.testPanel();
+      const total = Number(res?.seconds) || 18;
+      setSweep({ total, elapsed: 0 });
+    } catch (e) {
+      setTestError(e.message || 'Không chạy được kiểm tra dàn');
+    } finally {
+      setTestBusy(false);
+    }
+  }, [readOnly, testBusy, sweep]);
+
+  // Đồng hồ đếm của thanh tiến trình. Nhịp 250ms cho thanh chạy mượt mà vẫn rẻ.
+  useEffect(() => {
+    if (!sweep) return undefined;
+    const id = setInterval(() => {
+      setSweep((s) => {
+        if (!s) return s;
+        const elapsed = s.elapsed + 0.25;
+        if (elapsed >= s.total) return null; // xong -> dọn, phần báo xong ở dưới
+        return { ...s, elapsed };
+      });
+    }, 250);
+    return () => clearInterval(id);
+  }, [sweep?.total, !!sweep]);
+
+  // Khi tiến trình vừa kết thúc thì bật thông báo, tự tắt sau 6 giây.
+  const wasSweeping = useRef(false);
+  useEffect(() => {
+    if (sweep) {
+      wasSweeping.current = true;
+      return undefined;
+    }
+    if (!wasSweeping.current) return undefined;
+    wasSweeping.current = false;
+    setSweepDone('Đã quét xong toàn dàn — cả 9 thiết bị đều đã nhận lệnh bật.');
+    sweepTimer.current = setTimeout(() => setSweepDone(null), 6000);
+    return () => clearTimeout(sweepTimer.current);
+  }, [sweep]);
+
+  // Dừng khẩn cấp huỷ mọi thứ đang xếp hàng, nên thanh tiến trình phải tắt theo
+  // thay vì chạy tiếp trên một hàng đợi đã bị xoá.
+  useEffect(() => {
+    if (estopEngaged) {
+      setSweep(null);
+      setSweepDone(null);
+    }
+  }, [estopEngaged]);
+
+  useEffect(() => () => clearTimeout(sweepTimer.current), []);
+
   // Engaging is destructive, so it takes two presses; releasing takes one.
   const pressEstop = useCallback(async () => {
     if (estopBusy || readOnly) return;
@@ -434,7 +517,7 @@ export function Control() {
     : estopEngaged
       ? 'Không thể bật TỰ ĐỘNG cho tới khi giải trừ dừng khẩn cấp.'
       : mode === 'AUTO'
-        ? 'Đã bật toàn bộ bơm và van, sau đó hệ thống chạy theo ngưỡng trong CÀI ĐẶT.'
+        ? 'ESP32 dưới ruộng đang tự điều khiển. Dải bên dưới cho biết đang ở bước nào.'
         : mode === 'MANUAL'
           ? 'Bạn bật/tắt từng bơm và van bằng tay.'
           : loading
@@ -518,6 +601,62 @@ export function Control() {
               />
             </div>
             <p className={`ctrl-note${modeError ? ' is-bad' : ''}`}>{modeNote}</p>
+
+            {/* Ở TỰ ĐỘNG, chín công tắc đều khoá — không có dải này thì màn hình
+                không nói được hệ thống đang làm gì, mà đó lại là câu hỏi đầu
+                tiên của người đứng xem. */}
+            {mode === 'AUTO' && !estopEngaged && <EngineFlow status={status} />}
+
+            {/* Chỉ hiện ở THỦ CÔNG: ở TỰ ĐỘNG tủ điện từ chối mọi lệnh tay nên
+                bài quét sẽ bị NACK sạch, đưa nút ra chỉ để bấm hỏng. */}
+            {mode === 'MANUAL' && !estopEngaged && !readOnly && (
+              <div className="ctrl-test">
+                <button
+                  type="button"
+                  className="ctrl-test-btn"
+                  disabled={testBusy || !!sweep}
+                  onClick={runPanelTest}
+                >
+                  {testBusy ? 'Đang gửi…' : sweep ? 'Đang quét…' : 'Kiểm tra toàn dàn'}
+                </button>
+
+                {sweep && (
+                  <div className="ctrl-sweep">
+                    {/* Thanh chạy theo đúng lịch backend trả về, và nói luôn đang
+                        tới thiết bị nào — người đứng cạnh tủ đối chiếu được với
+                        tiếng relay vừa kêu. */}
+                    <div
+                      className="ctrl-sweep-bar"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={Math.round(sweep.total)}
+                      aria-valuenow={Math.round(sweep.elapsed)}
+                      aria-label="Tiến trình quét toàn dàn"
+                    >
+                      <span
+                        className="ctrl-sweep-fill"
+                        style={{ width: `${Math.min(100, (sweep.elapsed / sweep.total) * 100)}%` }}
+                      />
+                    </div>
+                    <p className="ctrl-sweep-text">
+                      <strong>{sweepLabel(sweep.elapsed)}</strong>
+                      <span>
+                        {Math.max(0, Math.ceil(sweep.total - sweep.elapsed))} giây nữa
+                      </span>
+                    </p>
+                  </div>
+                )}
+
+                {sweepDone && (
+                  <p className="ctrl-sweep-done" role="status">
+                    <span className="ctrl-sweep-tick" aria-hidden="true">✓</span>
+                    {sweepDone}
+                  </p>
+                )}
+
+                {testError && <p className="ctrl-note is-bad" role="alert">{testError}</p>}
+              </div>
+            )}
           </Panel>
 
           <Panel grow icon={<IconValve />} title="Điều khiển thiết bị - Van">

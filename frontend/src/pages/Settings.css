@@ -443,11 +443,53 @@
 
 .set-table table { min-width: 720px; }
 .set-table th { font-size: 12px; }
+/* Công tắc gạt, nhưng vẫn là <input type="checkbox"> thật bên dưới — giữ được
+   bàn phím (Space), trình đọc màn hình, và trạng thái :focus-visible của trình
+   duyệt. Chỉ đổi phần vẽ, không thay bằng <div> giả. */
 .set-check {
-  width: 20px;
-  height: 20px;
-  accent-color: var(--blue);
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 23px;
+  margin: 0;
+  border-radius: 999px;
+  border: 1px solid #c9d4e8;
+  background: #e4eaf5;
   cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+/* Núm gạt */
+.set-check::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.3);
+  transition: transform 0.16s ease;
+}
+
+.set-check:checked {
+  background: var(--blue);
+  border-color: var(--blue);
+}
+.set-check:checked::after { transform: translateX(19px); }
+
+.set-check:hover:not(:disabled) { border-color: #9db3dd; }
+.set-check:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.set-check:disabled { cursor: not-allowed; opacity: 0.55; }
+
+@media (prefers-reduced-motion: reduce) {
+  .set-check, .set-check::after { transition: none; }
 }
 .set-name-input { width: 100%; min-width: 130px; }
 .set-num-input { width: 104px; text-align: right; font-variant-numeric: tabular-nums; }
