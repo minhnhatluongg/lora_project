@@ -320,7 +320,7 @@ Cùng trang này, chỉnh luôn **ngưỡng cảnh báo** (pH, EC tính bằng *
 
 | Trên dashboard | Còn thiếu gì |
 |---|---|
-| **Độ ẩm không khí**, **Nhiệt độ không khí**, **Cảm biến mưa** | Firmware STM32 **đã đóng gói sẵn 3 trường này vào gói LoRa**, nhưng hàm `readAirSensors()` vẫn đang gán số cứng (`AirTemp = 32.5; AirHum = 70.0; RainPercent = 15;`). Đấu board thật vào **và** thay 3 dòng đó bằng lệnh đọc cảm biến. |
+| **Độ ẩm không khí**, **Nhiệt độ không khí**, **Cảm biến mưa** | ✅ Đã đọc số thật: DHT22 trên `PA0`, board cảm biến mưa đọc ADC trên `PA1` (có lọc trung bình trượt). Chỉ cần đấu dây đúng hai chân đó. |
 | **Bơm 2 … Bơm 5** | Đấu đủ relay ở tủ điện. Không đấu relay trực tiếp vào ESP32 — mọi lệnh đi qua trạm Nano bằng LoRa. |
 
 ---
@@ -566,4 +566,4 @@ Hậu quả nếu để nguyên: bơm châm nước vào bồn trộn sẽ dừn
 ---
 
 📄 Xem thêm: [HUONG-DAN-TRIEN-KHAI.docx](HUONG-DAN-TRIEN-KHAI.docx) (bản Word,
-bảng tra biến cấu hình theo từng máy) và [firmware/README.md](firmware/README.md).
+bảng tra biến cấu hình theo từng máy).

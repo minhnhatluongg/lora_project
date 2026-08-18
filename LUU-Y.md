@@ -33,7 +33,7 @@ translation unit"* — nó **tự thừa nhận là chỉ tô đỏ cho vui, kh�
 2. `File → Open` → chọn `firmware/esp32_master/esp32_master.ino`
 3. `Tools → Board` → **ESP32S3 Dev Module**
 4. `Tools → Port` → chọn cổng COM của board
-5. Cài 2 thư viện trong `Tools → Manage Libraries`: **Adafruit GFX** và **Adafruit SSD1306**
+5. Cài 3 thư viện trong `Tools → Manage Libraries`: **Adafruit GFX**, **Adafruit SSD1306**, **ArduinoJson**
 6. Bấm **Verify (✓)** → phải xanh, không lỗi
 7. Bấm **Upload (→)**
 
@@ -42,7 +42,8 @@ chữ thôi, còn nạp chip thì sang Arduino IDE.
 
 > Ba board dùng ba công cụ khác nhau:
 > `esp32_master/` và `nano_relay/` → **Arduino IDE**;
-> `stm32_sensor_node/` → **PlatformIO** (có sẵn `platformio.ini`).
+> `stm32_sensor_node/` → **Arduino IDE** (core STM32duino **2.7.1**, không phải 3.x)
+> hoặc PlatformIO — cùng một file `.ino`.
 
 ---
 
@@ -206,13 +207,14 @@ Màn **OLED** trên ESP32 cũng hiện `WiFi Offline` nếu chưa vào được 
 
 ---
 
-## 6. Hai chỗ trong firmware CỐ Ý chưa sửa
+## 6. Hai lỗi cũ nay đã được sửa
 
-Không phải quên — để người nắm sa bàn quyết định, vì đụng vào là điều khiển bơm thật.
+Ghi lại để ai đọc tài liệu cũ không đi sửa ngược lại cái đang đúng.
 
-### a. Logic AUTO đang tham chiếu nhầm bồn Nước / bồn Trộn
+### a. ✅ Ánh xạ bồn đã đúng
 
-Ánh xạ bồn đã chốt theo dây thật:
+Trước đây `handleAutoMixingLogic()` và `handleAutoIrrigationLogic()` dùng ngược
+`Dist3` ↔ `Dist4`. Nhóm phần cứng đã sửa; ánh xạ hiện tại khớp dây thật:
 
 | Chân STM32 | Biến | Bồn |
 |---|---|---|
@@ -221,23 +223,12 @@ Không phải quên — để người nắm sa bàn quyết định, vì đụn
 | `PB15` | `Dist3` | **Nước** |
 | `PA8` | `Dist4` | **Trộn** |
 
-Nhưng trong `esp32_master.ino`, hai hàm `handleAutoMixingLogic()` và
-`handleAutoIrrigationLogic()` vẫn đang dùng ngược `Dist3` ↔ `Dist4`.
+---
 
-**Chạy ở chế độ THỦ CÔNG thì không ảnh hưởng gì.** Trước khi bật TỰ ĐỘNG thì
-phải đổi chỗ hai biến này và thử tay trước.
+### b. ✅ Cảm biến không khí và mưa đã là số thật
 
-### b. Cảm biến không khí và mưa vẫn là số giả
-
-Trong `stm32_sensor_node/src/main.cpp`, hàm `readAirSensors()` đang gán cứng:
-
-```cpp
-AirTemp = 32.5;  AirHum = 70.0;  RainPercent = 15;
-```
-
-Đường truyền từ đây lên dashboard **đã thông sẵn** — thay bằng lệnh đọc
-DHT22/SHT31 và cảm biến mưa thật là hiện số ngay, không phải sửa gì thêm ở
-backend hay frontend.
+Bản firmware mới đọc DHT22 trên `PA0` và board cảm biến mưa qua ADC trên `PA1`,
+có bộ lọc trung bình trượt. Không còn gán số cứng nữa.
 
 ---
 

@@ -61,7 +61,7 @@ stateDiagram-v2
     [*] --> ChuaChon
     ChuaChon: 🔒 CHƯA CHỌN — mọi bơm và van đều xám
     ThuCong: ✋ THỦ CÔNG — bật tắt từng cái bằng tay
-    TuDong: ⚙️ TỰ ĐỘNG — bật ON toàn bộ rồi tự chạy
+    TuDong: ⚙️ TỰ ĐỘNG — giao quyền cho ESP32 dưới ruộng
 
     ChuaChon --> ThuCong: bấm THỦ CÔNG
     ChuaChon --> TuDong: bấm TỰ ĐỘNG
@@ -82,28 +82,42 @@ hành, không bao giờ là mặc định.
 
 ### Bấm TỰ ĐỘNG thì chuyện gì xảy ra
 
-Không phải bật cùng lúc. Backend xếp hàng **10 lệnh, mỗi lệnh cách nhau 2 giây**:
+**Không bật gì cả.** Web chỉ gửi đúng một lệnh `mode=AUTO` rồi giao quyền cho
+máy trạng thái chạy trên ESP32 — nơi có khóa chéo bồn cạn và trời mưa mà backend
+không có.
+
+Bản trước web bật sẵn cả 9 thiết bị rồi mới giao quyền. Bỏ đi vì hai lẽ: máy
+trạng thái ghi đè lại sau vài giây, và bật bơm Đạm/Kali khi **chưa pha, chưa
+khuấy** là sai quy trình dinh dưỡng.
+
+Đổi lại, màn CONTROL vẽ **dải tiến trình** cho biết máy đang ở bước nào:
 
 ```
-  giây   0    2    4    6    8   10   12   14   16   18
-         │    │    │    │    │    │    │    │    │    │
+Pha phân:  [đổ nước] → [đo EC] → [châm Đạm+Kali] → [khuấy] → ✅ đạt chuẩn
+                                                      │
+                              chưa đạt chuẩn thì KHÓA tưới
+                                                      ↓
+Tưới:      [chờ đất khô] → [mở van] → [đang tưới] → [đóng van] → [nghỉ thấm]
+```
+
+### Nút "Kiểm tra toàn dàn" — chỉ hiện ở THỦ CÔNG
+
+Việc quét bật lần lượt toàn bộ thiết bị nay là **một nút riêng**, dùng khi
+nghiệm thu đấu dây tủ điện:
+
+```
+  giây   0    2    4    6    8   10   12   14   16
   VAN    ▓───▓───▓───▓
          Van1 Van2 Van3 Van4          ← mở trước
-                             │
   BƠM                        ▓───▓───▓───▓───▓
                              Bơm1 Bơm2 Bơm3 Bơm4 Bơm5
-                                                      │
-  CHẾ ĐỘ                                              ▓
-                                                      mode=AUTO
 ```
-
-**Ba điều được bảo đảm ở đây, mỗi điều vì một lý do khác nhau:**
 
 | Bảo đảm | Vì sao |
 |---|---|
-| **Cách nhau 2 giây** | 5 mô-tơ bơm đóng cùng lúc là một cú dòng khởi động lớn lên tủ điện |
-| **Van mở trước bơm** | Bơm chạy vào ống đóng là **chạy chết máy** (dead-head). Chính firmware cũng làm vậy: `AUTO_OPEN_VALVE` → chờ 2s → `AUTO_START_PUMP` |
-| **`mode=AUTO` đi cuối cùng** | Nano **từ chối mọi lệnh bật tay khi đã ở AUTO** ("KHÓA AN TOÀN"). Nếu đổi chế độ trước thì cả 9 lệnh bật đều bị từ chối |
+| **Cách nhau 2 giây** | 5 mô-tơ bơm đóng cùng lúc là cú dòng khởi động lớn lên tủ |
+| **Van mở trước bơm** | Bơm chạy vào ống đóng là **chạy chết máy** (dead-head) |
+| **Chỉ chạy ở THỦ CÔNG** | Ở TỰ ĐỘNG, Nano từ chối mọi lệnh tay — quét sẽ bị NACK sạch |
 
 Cơ chế: mỗi lệnh có cột `run_after` trong hàng đợi. Lệnh vẫn nằm đó nhưng backend
 **không đưa cho ESP32** cho tới đúng giờ — nên giãn cách được giữ nguyên bất kể
@@ -350,83 +364,42 @@ hóa**. Không ai xen ngang được chu trình tự động.
 
 ---
 
-### 4.2 ⚠️ Đồng bộ chế độ chỉ đi MỘT CHIỀU
+### 4.2 ✅ Đồng bộ chế độ hai chiều (đã sửa)
 
-Đây là một giới hạn thật, cần biết trước khi vận hành.
+Trước đây chế độ chỉ đi một chiều: bấm trên web thì màn Nextion đổi theo, nhưng
+bấm dưới tủ hoặc trên Nextion thì **web không hề biết** — có thể ngồi hiện THỦ
+CÔNG trong khi ngoài ruộng đã chạy TỰ ĐỘNG cả tiếng.
+
+Nay ESP32 báo về `POST /api/status/report` mỗi lần chế độ đổi, ở cả ba nguồn:
 
 | Bấm ở đâu | HMI Nextion | Web |
 |---|---|---|
-| **Web** → | ✅ tự gạt sang AUTO | ✅ |
-| **HMI Nextion** → | ✅ | ❌ **web KHÔNG biết** |
-| **Nút cơ mặt tủ** → | ✅ | ❌ **web KHÔNG biết** |
+| **Web** | ✅ | ✅ |
+| **HMI Nextion** | ✅ | ✅ |
+| **Nút cơ mặt tủ** | ✅ | ✅ |
 
-Lý do, ba tầng đều thiếu:
+Mỗi lần đổi còn ghi một dòng vào trang **Cảnh báo** — đọc lại nhật ký sẽ biết vì
+sao hệ thống bắt đầu hoặc ngừng tưới.
 
-1. Hàm xử lý nút AUTO trên Nextion chỉ gọi `sendLoRaCommand()` và
-   `updateDashboard()` — **không gọi hàm nào đẩy lên backend**.
-2. Tên `updateDashboard()` gây hiểu nhầm: nó **ghi lên màn Nextion**
-   (`sendText("t0.txt", ...)`), **không phải** lên web. Hàm đẩy lên web là
-   `pushDeviceStateToBackend()`.
-3. Mà `pushDeviceStateToBackend()` cũng chỉ gửi trạng thái `pump1..5` và
-   `van1..4` — **không có trường nào cho chế độ**. Backend cũng chưa có endpoint
-   nào cho thiết bị báo chế độ (`/api/status/mode` đòi JWT, ESP32 chỉ có
-   `x-api-key`).
-
-**Hệ quả:** gạt AUTO dưới tủ điện thì web vẫn hiển thị chế độ cũ. Bơm và van thì
-vẫn đồng bộ đúng (nhờ `<SYNC:>` → `pushDeviceStateToBackend()`), **chỉ riêng chế
-độ là lệch.**
-
-Nếu web tưởng đang THỦ CÔNG mà thực tế ESP32 đang AUTO: bấm công tắc trên web sẽ
-**báo lệnh thất bại**, không phải bật được thiết bị. Sai lệch này an toàn — không
-tạo ra trạng thái giả — nhưng gây khó hiểu.
-
-> **Cách né:** khi vận hành thì **chọn chế độ từ một chỗ duy nhất**. Nếu đã quen
-> bấm dưới tủ hoặc trên Nextion thì đừng tin ô chế độ trên web; ngược lại nếu
-> điều khiển từ web thì mọi thứ đồng bộ đầy đủ.
+Cùng lời gọi đó mang theo **bước hiện tại của hai máy trạng thái**
+(`autoState`, `mixState`, `mixReady`), là thứ duy nhất cho phép màn CONTROL vẽ
+được dải tiến trình — hai máy này chạy trên ESP32 và vẫn chạy khi mất mạng.
 
 ---
 
-## 5. ⚠️ Khóa chéo đang đọc NHẦM BỒN
+## 5. ✅ Ánh xạ bồn đã đúng (đã sửa)
 
-**Đây là lỗi phải sửa trước khi chạy TỰ ĐỘNG.**
+Trước đây cả ba chỗ trong ESP32 tham chiếu ngược `Dist3`/`Dist4`, khiến khóa
+chéo "bồn cạn nước" thực chất canh nhầm bồn Trộn. **Nhóm phần cứng đã sửa** ở
+bản firmware mới:
 
-Ánh xạ đã được nhóm phần cứng chốt theo dây thật:
-
-| Chân STM32 | Biến | Bồn |
-|---|---|---|
-| `PB15` | `Dist3` | **Nước** |
-| `PA8` | `Dist4` | **Trộn** |
-
-Nhưng cả **ba** chỗ trong ESP32 đều tham chiếu ngược:
-
-| Dòng | Code | Ý định | Thực tế đọc |
+| Chân STM32 | Biến | Bồn | Dùng ở |
 |---|---|---|---|
-| 544 | `Dist4 < WATER_EMPTY_DIST` | bồn **Nước** còn nước? | ❌ bồn **Trộn** |
-| 552 | `Dist3 > 50.0` → bật Bơm 3 | bồn **Trộn** đã đầy chưa? | ❌ bồn **Nước** |
-| 614 | `Dist4 > WATER_EMPTY_DIST` | **khóa chéo cạn nước** | ❌ bồn **Trộn** |
+| `PB15` | `Dist3` | **Nước** | khóa cạn nước, điều kiện bắt đầu pha |
+| `PA8` | `Dist4` | **Trộn** | quyết định bơm thêm nước vào bồn trộn |
 
-**Hậu quả cụ thể của dòng 552** — đây là chỗ nguy hiểm nhất:
-
-Bước `MIX_ADD_WATER` bật Bơm 3 khi `Dist3 > 50`, tức là khi khoảng cách lớn, tức
-là khi **bồn Nước đang cạn**. Và tắt bơm khi bồn Nước đầy.
-
-Nghĩa là logic bị **lộn ngược hoàn toàn**:
-
-- Bơm hút nước **đúng lúc bồn nguồn sắp cạn** → chạy khô, cháy bơm
-- **Không bao giờ nhìn vào bồn Trộn** → bơm cho tới khi bồn trộn tràn
-
-Và dòng 614 khiến khóa an toàn "bồn cạn nước" thực chất đang canh **bồn Trộn** —
-nên khóa chéo quan trọng nhất **không bảo vệ đúng cái bồn nó định bảo vệ**.
-
-### Cách sửa
-
-Trong `firmware/esp32_master/esp32_master.ino`, **đổi chỗ `Dist3` và `Dist4`** ở
-cả ba dòng trên.
-
-> Tôi **cố ý không tự sửa**: đây là logic điều khiển bơm thật, phải có người nắm
-> sa bàn thử tay trước. **Chạy ở THỦ CÔNG thì hoàn toàn không ảnh hưởng.**
-
----
+Cảm biến không khí và mưa cũng **đã là số thật** — DHT22 trên `PA0`, board mưa
+đọc ADC trên `PA1`, có bộ lọc trung bình trượt.
 
 ## 6. Quy trình vận hành khuyến nghị
 
@@ -474,5 +447,4 @@ flowchart TD
 |---|---|
 | [LUU-Y.md](LUU-Y.md) | Lỗi hay gặp khi cài trên máy mới |
 | [HUONG-DAN-CHAY-THAT.md](HUONG-DAN-CHAY-THAT.md) | 8 bước từ code tới đo thật, sơ đồ chân từng board |
-| [firmware/README.md](firmware/README.md) | Chi tiết 3 board và cầu nối web |
 | [HUONG-DAN-TRIEN-KHAI.docx](HUONG-DAN-TRIEN-KHAI.docx) | Bảng tra biến config theo từng máy |
