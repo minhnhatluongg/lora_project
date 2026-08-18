@@ -1,6 +1,12 @@
 /**
  * ============================================================================
- * STM32F411 SENSOR NODE - (FIX LỖI HIỂN THỊ LCD & CHÂN CẮM)
+ * STM32F411 SENSOR NODE - POLL-RESPONSE MODE (chỉ gửi khi ESP32 hỏi)
+ * ============================================================================
+ * Thay đổi so với bản tự phát định kỳ:
+ * - Bỏ hẳn timer tự gửi <DATA:...> mỗi 2 giây.
+ * - Lắng nghe lệnh <REQ_DATA> từ ESP32, chỉ gửi khi được hỏi.
+ * - Nút PB2 (ép đo) giờ chỉ cập nhật LCD tại chỗ, KHÔNG tự phát LoRa nữa,
+ *   để tránh chen ngang kênh RF chung với giao tiếp ESP32<->Nano.
  * ============================================================================
  */
 
@@ -14,13 +20,16 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // ===================== RS485 MODBUS (UART1) =====================
 HardwareSerial Serial1(PA10, PA9); 
-#define RS485_Serial Serial1
+#define RS485_Serial Serial1 
 const uint8_t SENSOR_ID = 0x02; 
 
 // ===================== LORA E32 (UART2) =====================
 HardwareSerial loraSerial(PA3, PA2);
 #define LORA_M0  PA5
 #define LORA_M1  PA6
+// Nếu board bạn có nối chân AUX của E32, khai báo thêm và dùng như Nano/ESP32:
+// #define LORA_AUX PA4 
+// pinMode(LORA_AUX, INPUT); và while(digitalRead(LORA_AUX)==LOW) delay(2); trước khi TX
 
 // ===================== CHÂN NÚT NHẤN =====================
 #define BTN1_PIN PB5
@@ -33,12 +42,12 @@ HardwareSerial loraSerial(PA3, PA2);
 #define ECHO3_PIN PB15
 #define ECHO4_PIN PA8
 
-// ===================== CHÂN DHT (ĐANG Ở CHÂN A0) =====================
+// ===================== CHÂN DHT =====================
 #define DHT_PIN  PA0      
-#define DHT_TYPE DHT22    // Lưu ý: Nếu cảm biến màu XANH DƯƠNG, hãy đổi chữ DHT22 thành DHT11
+#define DHT_TYPE DHT22    
 DHT dht(DHT_PIN, DHT_TYPE);
 
-// ===================== CHÂN ADC MƯA (ĐANG Ở CHÂN A1) =====================
+// ===================== CHÂN ADC MƯA =====================
 #define RAIN_SENSOR_PIN PA1 
 
 // =================================================================
@@ -109,15 +118,15 @@ int mapADCToRainPercent(int rawADC) {
 }
 
 uint8_t lcdPage = 0;
-bool forceSendNext = false;
 unsigned long lastBtn1Debounce = 0;
 unsigned long lastBtn2Debounce = 0;
-unsigned long lastLoraSendTime = 0;
-const unsigned long LORA_SEND_INTERVAL = 2000UL;  
 const unsigned long DEBOUNCE_DELAY = 30;
 
 bool lastBtn1State = HIGH;
 bool lastBtn2State = HIGH;
+
+// LoRa RX buffer cho lệnh REQ_DATA từ ESP32
+String loraRxBuffer = "";
 
 void setLoraNormalMode() {
   digitalWrite(LORA_M0, LOW);
@@ -267,7 +276,7 @@ void readModbusSensor() {
 }
 
 // =================================================================
-// LORA TX
+// LORA TX - CHỈ GỌI KHI NHẬN ĐƯỢC <REQ_DATA> TỪ ESP32
 // =================================================================
 void sendLoraSensorData() {
   setLoraNormalMode();
@@ -291,14 +300,32 @@ void sendLoraSensorData() {
   delay(10);
   loraSerial.println(payload);
   delay(20);
-  lastLoraSendTime = millis();
+  Serial.println(">> [LORA TX -> ESP32] Trả lời REQ_DATA: " + payload);
 }
 
 // =================================================================
-// HÀM HIỂN THỊ LCD (ĐÃ FIX LỖI GHOSTING VÀ FLOAT)
+// LẮNG NGHE LỆNH TỪ ESP32 (CHỈ CÓ <REQ_DATA>)
+// =================================================================
+void handleLoraIncoming() {
+  while (loraSerial.available()) {
+    char c = loraSerial.read();
+    if (c == '\n') {
+      loraRxBuffer.trim();
+      if (loraRxBuffer == "<REQ_DATA>") {
+        Serial.println("  [LORA RX] Nhan REQ_DATA -> gui du lieu");
+        sendLoraSensorData();
+      }
+      loraRxBuffer = "";
+    } else if (c != '\r' && loraRxBuffer.length() < 64) {
+      loraRxBuffer += c;
+    }
+  }
+}
+
+// =================================================================
+// HÀM HIỂN THỊ LCD
 // =================================================================
 void renderLCD() {
-  // Biến tĩnh lưu trang trước đó để xóa màn hình mượt mà khi chuyển trang
   static uint8_t lastPage = 255;
   if (lcdPage != lastPage) {
     lcd.clear();
@@ -306,46 +333,34 @@ void renderLCD() {
   }
 
   if (lcdPage == 0) {
-    // Dòng 1: T: 35.0C  H: 75.0%
     lcd.setCursor(0, 0); 
     lcd.print("T:"); lcd.print(sensorData.Temperature, 1); lcd.print("C ");
     lcd.print("H:"); lcd.print(sensorData.Humidity, 1); lcd.print("%   ");
-    
-    // Dòng 2: EC: 1200  pH: 6.5
     lcd.setCursor(0, 1); 
     lcd.print("EC:"); lcd.print(sensorData.EC_Value); lcd.print(" ");
     lcd.print("pH:"); lcd.print(sensorData.pH_Value, 1); lcd.print("    ");
   }
   else if (lcdPage == 1) {
-    // Dòng 1: NPK
     lcd.setCursor(0, 0); 
     lcd.print("Dinh duong (NPK) ");
-    
-    // Dòng 2: N:12 P:15 K:20
     lcd.setCursor(0, 1); 
     lcd.print("N:"); lcd.print(sensorData.Nitrogen); 
     lcd.print(" P:"); lcd.print(sensorData.Phosphorus); 
     lcd.print(" K:"); lcd.print(sensorData.Potassium);
-    lcd.print("   "); // Khoảng trắng quét rác
+    lcd.print("   ");
   }
   else if (lcdPage == 2) {
-    // Dòng 1: A: 35.0C  R: 75%
     lcd.setCursor(0, 0); 
     lcd.print("A:"); lcd.print(sensorData.AirTemp, 1); lcd.print("C  ");
     lcd.print("R:"); lcd.print(sensorData.RainPercent); lcd.print("%   ");
-    
-    // Dòng 2: H: 80.0%  ADC: 4095
     lcd.setCursor(0, 1); 
     lcd.print("H:"); lcd.print(sensorData.AirHum, 1); lcd.print("% ");
     lcd.print("A:"); lcd.print(sensorData.RainRawADC); lcd.print("   ");
   }
   else {
-    // Dòng 1: K: 50cm  W: 80cm
     lcd.setCursor(0, 0); 
     lcd.print("K:"); lcd.print((int)sensorData.Dist3); lcd.print("cm ");
     lcd.print("W:"); lcd.print((int)sensorData.Dist4); lcd.print("cm  ");
-    
-    // Dòng 2: D1: 10cm  D2: 20cm
     lcd.setCursor(0, 1); 
     lcd.print("D1:"); lcd.print((int)sensorData.Dist1); lcd.print("cm ");
     lcd.print("D2:"); lcd.print((int)sensorData.Dist2); lcd.print("cm  ");
@@ -361,19 +376,27 @@ void handleButtons() {
     static bool btn1ProcessedState = HIGH;
     if (readingBtn1 != btn1ProcessedState) {
       btn1ProcessedState = readingBtn1;
-      // Nhấn nút 1 để chuyển trang
       if (btn1ProcessedState == LOW) { lcdPage = (lcdPage + 1) % 4; renderLCD(); }
     }
   }
   lastBtn1State = readingBtn1;
   
+  // Nút PB7 giờ chỉ ép đo tại chỗ cho LCD, KHÔNG tự gửi LoRa nữa
+  // (tránh phát sóng ngoài dự kiến gây tranh chấp kênh)
   bool readingBtn2 = digitalRead(BTN2_PIN);
   if (readingBtn2 != lastBtn2State) { lastBtn2Debounce = currentMillis; }
   if ((currentMillis - lastBtn2Debounce) > DEBOUNCE_DELAY) {
     static bool btn2ProcessedState = HIGH;
     if (readingBtn2 != btn2ProcessedState) {
       btn2ProcessedState = readingBtn2;
-      if (btn2ProcessedState == LOW) { forceSendNext = true; }
+      if (btn2ProcessedState == LOW) {
+        readModbusSensor();
+        readDHT22Sensor();
+        readRainSensor();
+        readAllUltrasonic();
+        renderLCD();
+        Serial.println(">> [PB2] Ep do tai cho (khong gui LoRa)");
+      }
     }
   }
   lastBtn2State = readingBtn2;
@@ -385,7 +408,7 @@ void handleButtons() {
 void setup() {
   Serial.begin(115200);
   
-  analogReadResolution(12); // Kích hoạt bộ ADC 12-bit STM32
+  analogReadResolution(12);
   
   pinMode(BTN1_PIN, INPUT); pinMode(BTN2_PIN, INPUT);
   pinMode(TRIG_PIN, OUTPUT); digitalWrite(TRIG_PIN, LOW);
@@ -404,6 +427,7 @@ void setup() {
   dht.begin();
   
   delay(1000); lcd.clear();
+  Serial.println("--- STM32 SLAVE: CHE DO POLL-RESPONSE, CHO REQ_DATA ---");
 }
 
 void loop() {
@@ -413,15 +437,11 @@ void loop() {
   readAllUltrasonic();     
   
   renderLCD();
-  
-  if (forceSendNext || (millis() - lastLoraSendTime >= LORA_SEND_INTERVAL)) {
-    forceSendNext = false;
-    sendLoraSensorData();
-  }
+  handleLoraIncoming();   // lắng nghe REQ_DATA liên tục, không chặn (non-blocking)
   
   unsigned long waitStart = millis();
   while (millis() - waitStart < 500) {
     handleButtons();
-    if (forceSendNext) break;
+    handleLoraIncoming();   // vẫn lắng nghe trong lúc chờ, để không trễ trả lời REQ_DATA
   }
 }
