@@ -75,6 +75,8 @@ SemaphoreHandle_t queueMutex = NULL;
 volatile bool telemetryPending = false;
 volatile bool settingsPending = false;
 volatile bool deviceStatePending = false;
+// Che do hoac buoc may trang thai vua doi -> bao len web o vong web ke tiep.
+volatile bool statusReportPending = false;
 bool lastWiFiState = false; 
 volatile bool wifiUIUpdatePending = false;
 
@@ -106,6 +108,23 @@ int systemMode = -1;  // -1: chưa chọn | 0: MANUAL | 1: AUTO
 // =======================================================
 // RELAY STATES
 // =======================================================
+// --- DON VI EC ---------------------------------------------------------------
+// EC_Value tu dau do RS485 la uS/cm (co 1500). Nguong ecMin/ecMax truoc day mac
+// dinh 1.0 va 2.0 tuc mS/cm, roi dem so THANG voi EC_Value. "EC_Value > ecMax"
+// thanh ra LUON dung: may pha phan ket vinh vien o buoc pha loang, khong bao gio
+// bat isMixingReady, nen tuoi tu dong khong bao gio khoi dong.
+// Giu nguyen y dinh nong hoc (1.0 va 2.0 mS/cm), chi doi don vi cho khop.
+const float EC_MIN_DEFAULT = 1000.0;  // = 1.0 mS/cm
+const float EC_MAX_DEFAULT = 2000.0;  // = 2.0 mS/cm
+
+// Nhan so EC o bat ky don vi nao roi tra ve uS/cm. Can vi chip da nap firmware
+// cu con giu 1.0/2.0 trong Flash, va nguoi van hanh quen tay co the go "1.5".
+// Khong dung dich tuoi nao chi 50 uS/cm (gan bang nuoc cat) nen duoi nguong do
+// chac chan la dang noi mS/cm. Backend cung dung dung phep suy luan nay.
+float ecToMicro(float v) {
+  return (v > 0.0 && v < 50.0) ? v * 1000.0 : v;
+}
+
 bool pumpState[5] = {false, false, false, false, false};
 bool valveState[4] = {false, false, false, false};
 bool bom1State = false;
@@ -469,6 +488,9 @@ void processLoRaQueue() {
         retryCount = 0;
         currentCommand = "";
         updateOLED("LORA LOI", "ACK TIMEOUT");
+        // Khong nghe thay Nano tra loi -> khong duoc phep doan la lenh da chay.
+        updateNextionControlStates();
+        deviceStatePending = true;
       }
     }
     return; 
@@ -777,6 +799,62 @@ void postTelemetryToWeb() {
 // =======================================================
 // DEVICE STATE
 // =======================================================
+// Ten buoc cua hai may trang thai, gui nguyen van len web de man CONTROL ve
+// duoc dai tien trinh thay vi chi mot chu "TU DONG" va may o xam.
+//
+// Tham so kieu int chu khong phai enum: Arduino tu sinh prototype cho moi ham
+// trong file .ino roi CHEN LEN DAU file, truoc ca cho khai bao enum, nen de
+// nguyen kieu AutoState se bao "was not declared in this scope".
+const char * autoStateName(int s) {
+  switch ((AutoState)s) {
+    case AUTO_IDLE:          return "AUTO_IDLE";
+    case AUTO_OPEN_VALVE:    return "AUTO_OPEN_VALVE";
+    case AUTO_WAIT_VALVE:    return "AUTO_WAIT_VALVE";
+    case AUTO_START_PUMP:    return "AUTO_START_PUMP";
+    case AUTO_IRRIGATING:    return "AUTO_IRRIGATING";
+    case AUTO_STOP_PUMP:     return "AUTO_STOP_PUMP";
+    case AUTO_WAIT_PUMP_OFF: return "AUTO_WAIT_PUMP_OFF";
+    case AUTO_CLOSE_VALVE:   return "AUTO_CLOSE_VALVE";
+    case AUTO_RESTING:       return "AUTO_RESTING";
+  }
+  return "AUTO_IDLE";
+}
+
+const char * mixStateName(int s) {
+  switch ((MixState)s) {
+    case MIX_IDLE:            return "MIX_IDLE";
+    case MIX_ADD_WATER:       return "MIX_ADD_WATER";
+    case MIX_DOSING_NUTRIENT: return "MIX_DOSING_NUTRIENT";
+    case MIX_STIRRING:        return "MIX_STIRRING";
+    case MIX_WAIT_STABLE:     return "MIX_WAIT_STABLE";
+  }
+  return "MIX_IDLE";
+}
+
+// Bao len web: dang o che do nao, va hai may trang thai dang o buoc nao.
+//
+// Che do doi duoc o BA noi — dashboard, man Nextion, va nut co trong tu dien.
+// Chi cai dau di qua backend, nen truoc day web co the hien THU CONG trong khi
+// ngoai ruong da chay TU DONG ca tieng. Gio moi lan doi deu bao ve day.
+void reportStatusToWeb() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  StaticJsonDocument<256> doc;
+  doc["mode"] = (systemMode == 1) ? "AUTO" : (systemMode == 0 ? "MANUAL" : "NONE");
+  doc["autoState"] = autoStateName(autoState);
+  doc["mixState"] = mixStateName(mixState);
+  doc["mixReady"] = isMixingReady;
+
+  String body;
+  serializeJson(doc, body);
+
+  HTTPClient http;
+  beginRequest(http, "/api/status/report");
+  http.addHeader("Content-Type", "application/json");
+  http.POST(body);
+  http.end();
+}
+
 void pushDeviceStateToWeb() {
   if (WiFi.status() != WL_CONNECTED) return;
   bool pumps[5];
@@ -847,23 +925,16 @@ void pollWebCommands() {
     bool isON = (action == "ON");
     int relayPin = -1;
 
+    // Chi tinh ra so relay. Trang thai KHONG ghi o day — cho Nano ACK roi
+    // applyAckedRelayState() moi ghi, giong het duong Nextion. Neu Nano NACK
+    // (vi dang o AUTO chang han) thi dashboard giu nguyen trang thai that thay
+    // vi ve mot cai bom dang chay khong co that.
     if (devId.startsWith("pump")) {
-      relayPin = devId.substring(4).toInt();
-      if (relayPin >= 1 && relayPin <= 5) {
-        xSemaphoreTake(systemMutex, portMAX_DELAY);
-        pumpState[relayPin - 1] = isON;
-        if (relayPin == 1) bom1State = isON;
-        xSemaphoreGive(systemMutex);
-      }
+      int n = devId.substring(4).toInt();
+      if (n >= 1 && n <= 5) relayPin = n;
     } else if (devId.startsWith("van")) {
       int valveNum = devId.substring(3).toInt();
-      if (valveNum >= 1 && valveNum <= 4) {
-        relayPin = valveNum + 5;
-        xSemaphoreTake(systemMutex, portMAX_DELAY);
-        valveState[valveNum - 1] = isON;
-        if (valveNum == 1) van1State = isON;
-        xSemaphoreGive(systemMutex);
-      }
+      if (valveNum >= 1 && valveNum <= 4) relayPin = valveNum + 5;
     }
 
     if (relayPin >= 1 && relayPin <= 9) {
@@ -938,6 +1009,11 @@ void webTask(void* parameter) {
       pushSettingsToWeb();
     }
 
+    if (statusReportPending && WiFi.status() == WL_CONNECTED) {
+      statusReportPending = false;
+      reportStatusToWeb();
+    }
+
     if (deviceStatePending && WiFi.status() == WL_CONNECTED) {
       deviceStatePending = false;
       pushDeviceStateToWeb();
@@ -1002,6 +1078,7 @@ void processLoRaSync(const String& incomingData) {
     updateDashboard();
     deviceStatePending = true;
     loraSerial.println("<SYNC_ACK>");
+    statusReportPending = true;   // bao web: che do vua doi tu nut co duoi tu
     return;
   }
 
@@ -1035,6 +1112,42 @@ void processLoRaSync(const String& incomingData) {
   }
 }
 
+// Ghi nhan trang thai relay SAU KHI Nano da xac nhan bang ACK.
+//
+// Truoc day trang thai duoc ghi ngay luc bam nut ("lac quan"), va rieng lenh do
+// may trang thai AUTO sinh ra (enqueueAutoCommand) thi KHONG ghi o dau ca. Hai
+// hau qua:
+//   - AUTO chay bom ca buoi ma dashboard van bao OFF het, vi pumpState[] khong
+//     ai dong vao. Telemetry di duong khac nen so do van dung -> nhin ra ngoai
+//     giong het "do dung ma control sai".
+//   - Nano NACK (tu choi) thi trang thai da ghi lac quan van nam lai, dashboard
+//     va man Nextion hien mot cai bom dang chay ma thuc te khong chay.
+//
+// Gio chi mot noi duy nhat duoc ghi, va chi ghi khi da chac chan.
+void applyAckedRelayState(const String& cmd) {
+  int relay = -1;
+  bool on = false;
+  if (cmd.startsWith("<AUTOON"))       { relay = cmd.substring(7, cmd.length() - 1).toInt(); on = true;  }
+  else if (cmd.startsWith("<AUTOOFF")) { relay = cmd.substring(8, cmd.length() - 1).toInt(); on = false; }
+  else if (cmd.startsWith("<ON"))      { relay = cmd.substring(3, cmd.length() - 1).toInt(); on = true;  }
+  else if (cmd.startsWith("<OFF"))     { relay = cmd.substring(4, cmd.length() - 1).toInt(); on = false; }
+  else return;
+
+  if (relay < 1 || relay > 9) return;
+
+  xSemaphoreTake(systemMutex, portMAX_DELAY);
+  if (relay <= 5) {
+    pumpState[relay - 1] = on;
+    if (relay == 1) bom1State = on;
+  } else {
+    valveState[relay - 6] = on;
+    if (relay == 6) van1State = on;
+  }
+  xSemaphoreGive(systemMutex);
+
+  deviceStatePending = true;   // day len web o vong ke tiep
+}
+
 void handleLoraIncoming() {
   while (loraSerial.available()) {
     String incoming = loraSerial.readStringUntil('\n');
@@ -1057,6 +1170,11 @@ void handleLoraIncoming() {
 
       if (incoming.indexOf(expectedAck) >= 0) {
         Serial.println("  [LORA] ACK OK: " + expectedAck);
+        // Chi tai day trang thai relay moi duoc coi la that. Bao gom ca lenh
+        // <AUTOONx>/<AUTOOFFx> do state machine AUTO tu sinh ra, truoc day
+        // khong duoc ghi nhan o bat cu dau.
+        applyAckedRelayState(currentCommand);
+        updateNextionControlStates();
         isWaitingAck = false;
         retryCount = 0;
         
@@ -1075,6 +1193,10 @@ void handleLoraIncoming() {
         }
         currentCommand = "";
         updateOLED("CANH BAO", "NANO TU CHOI LENH");
+        // Lenh KHONG he duoc thuc thi -> trang thai giu nguyen, va keo nut tren
+        // Nextion ve dung thuc te (nguoi dung vua bam nen no da tu doi mau).
+        updateNextionControlStates();
+        deviceStatePending = true;
         // Nano từ chối nghĩa là 2 board đang hiểu khác nhau về mode (hoặc lệnh tay
         // lọt vào khi đang AUTO) -> dừng an toàn state machine AUTO thay vì chạy tiếp
         // dựa trên giả định sai.
@@ -1150,6 +1272,7 @@ void processNextionCommand(const String& cmd) {
     enqueueCommand("<SET_MODE=AUTO>");
     updateDashboard();
     updateNextionControlStates();
+    statusReportPending = true;   // bao web: che do vua doi tu man HMI
     return;
   }
 
@@ -1159,6 +1282,7 @@ void processNextionCommand(const String& cmd) {
     bom1State = false; van1State = false;
     updateDashboard();
     updateNextionControlStates();
+    statusReportPending = true;   // bao web: che do vua doi tu man HMI
     return;
   }
 
@@ -1168,17 +1292,30 @@ void processNextionCommand(const String& cmd) {
     int state = cmd.substring(equalPos + 1).toInt();
     bool isOn = (state == 1); // Đảm bảo trạng thái ON/OFF khớp với giá trị .val của bạn (1 là ON, 0 là OFF)
 
-    if (systemMode == 0 && !isWaitingAck) {
-      // Chỉ cập nhật biến nội bộ, KHÔNG gọi updateDashboard ở đây
-      xSemaphoreTake(systemMutex, portMAX_DELAY);
-      pumpState[num - 1] = isOn;
-      if (num == 1) bom1State = isOn;
-      xSemaphoreGive(systemMutex);
+    // Moi nhanh phai ket thuc bang mot viec THAY DUOC. Truoc day chi co dieu
+    // kien (systemMode == 0 && !isWaitingAck) va khong he co else, nen ba tinh
+    // huong rat hay gap deu im lang tuyet doi: chua chon che do (systemMode
+    // == -1), dang o AUTO, va dang cho ACK lenh truoc. Nguoi van hanh bam nut,
+    // relay khong keu, man khong bao gi — ma nut thi DA tu doi mau luc cham vao.
+    if (num < 1 || num > 5) return;
 
+    if (systemMode == -1) {
+      Serial.println(">> [CHUA CHON CHE DO] Bam THU CONG truoc da.");
+      updateOLED("CHUA CHON CHE DO", "Bam THU CONG truoc");
+      updateNextionControlStates();
+    } else if (systemMode == 1) {
+      Serial.println(">> [DANG O AUTO] Tu choi lenh tay tu Nextion.");
+      updateOLED("DANG O TU DONG", "Tu choi lenh tay");
+      updateNextionControlStates();
+    } else if (isWaitingAck) {
+      Serial.println(">> [BAN] Dang cho ACK lenh truoc, bo qua lan bam nay.");
+      updateOLED("DANG BAN", "Cho ACK lenh truoc");
+      updateNextionControlStates();
+    } else {
+      // Khong ghi pumpState o day nua — cho ACK cua Nano roi moi ghi, de mot lan
+      // bi NACK khong de lai trang thai gia tren dashboard.
       String loraMsg = isOn ? "<ON" + String(num) + ">" : "<OFF" + String(num) + ">";
       enqueueCommand(loraMsg);
-      
-      // KHÔNG gọi updateNextionControlStates() ở đây để tránh giật nút
     }
     return;
   }
@@ -1189,15 +1326,23 @@ void processNextionCommand(const String& cmd) {
     int state = cmd.substring(equalPos + 1).toInt();
     bool isOn = (state == 1); // Trạng thái ON/OFF khớp với Dual-state Button (.val)
 
-    if (systemMode == 0 && !isWaitingAck) {
+    // Bon nhanh y het khoi BOM o tren, xem giai thich o do.
+    if (num < 1 || num > 4) return;
+
+    if (systemMode == -1) {
+      Serial.println(">> [CHUA CHON CHE DO] Bam THU CONG truoc da.");
+      updateOLED("CHUA CHON CHE DO", "Bam THU CONG truoc");
+      updateNextionControlStates();
+    } else if (systemMode == 1) {
+      Serial.println(">> [DANG O AUTO] Tu choi lenh tay tu Nextion.");
+      updateOLED("DANG O TU DONG", "Tu choi lenh tay");
+      updateNextionControlStates();
+    } else if (isWaitingAck) {
+      Serial.println(">> [BAN] Dang cho ACK lenh truoc, bo qua lan bam nay.");
+      updateOLED("DANG BAN", "Cho ACK lenh truoc");
+      updateNextionControlStates();
+    } else {
       int relay = num + 5; // Van 1 -> Relay 6, Van 2 -> Relay 7,...
-
-      // Chỉ cập nhật biến nội bộ, KHÔNG gọi updateDashboard ở đây để tránh giật nút
-      xSemaphoreTake(systemMutex, portMAX_DELAY);
-      valveState[num - 1] = isOn;
-      if (num == 1) van1State = isOn;
-      xSemaphoreGive(systemMutex);
-
       String loraMsg = isOn ? "<ON" + String(relay) + ">" : "<OFF" + String(relay) + ">";
       enqueueCommand(loraMsg);
     }
@@ -1219,8 +1364,10 @@ void processNextionCommand(const String& cmd) {
     String data = cmd.substring(5);
     float newPhMin = getValue(data, ',', 0).toFloat();
     float newPhMax = getValue(data, ',', 1).toFloat();
-    float newEcMin = getValue(data, ',', 2).toFloat();
-    float newEcMax = getValue(data, ',', 3).toFloat();
+    // Quy ve uS/cm ngay tai cua vao, de Flash chi chua mot don vi duy nhat du
+    // nguoi van hanh go "1.5" (quen tay mS/cm) hay "1500".
+    float newEcMin = ecToMicro(getValue(data, ',', 2).toFloat());
+    float newEcMax = ecToMicro(getValue(data, ',', 3).toFloat());
     float newTempMin = getValue(data, ',', 4).toFloat();
     float newTempMax = getValue(data, ',', 5).toFloat();
     float newHumMin = getValue(data, ',', 6).toFloat();
@@ -1264,7 +1411,7 @@ void processNextionCommand(const String& cmd) {
   }
 
   if (cmdUpper == "CMD=RESTORE") {
-    phMin = 5.5; phMax = 6.5; ecMin = 1.0; ecMax = 2.0;
+    phMin = 5.5; phMax = 6.5; ecMin = EC_MIN_DEFAULT; ecMax = EC_MAX_DEFAULT;
     tempMin = 22.0; tempMax = 35.0; humMin = 65.0; humMax = 80.0;
     timeBom = 10; timeNghi = 15;
 
@@ -1339,7 +1486,8 @@ void setup() {
   preferences.begin("system_data", false);
   systemPassword = preferences.getString("password", "123456");
   phMin = preferences.getFloat("phMin", 5.5); phMax = preferences.getFloat("phMax", 6.5);
-  ecMin = preferences.getFloat("ecMin", 1.0); ecMax = preferences.getFloat("ecMax", 2.0);
+  ecMin = ecToMicro(preferences.getFloat("ecMin", EC_MIN_DEFAULT));
+  ecMax = ecToMicro(preferences.getFloat("ecMax", EC_MAX_DEFAULT));
   tempMin = preferences.getFloat("tempMin", 22.0); tempMax = preferences.getFloat("tempMax", 35.0);
   humMin = preferences.getFloat("humMin", 65.0); humMax = preferences.getFloat("humMax", 80.0);
   timeBom = preferences.getInt("timeBom", 10); timeNghi = preferences.getInt("timeNghi", 15);
@@ -1374,8 +1522,23 @@ void loop() {
   handleLoraIncoming();
   processLoRaQueue();
   pollStm32IfIdle();
+  // Bat moi lan hai may trang thai buoc sang trang thai khac, de man CONTROL
+  // tren web ve duoc dai tien trinh dang chay den dau. Chi bao khi CO doi, khong
+  // ban lien tuc moi vong quet.
+  static AutoState lastAutoState = AUTO_IDLE;
+  static MixState  lastMixState  = MIX_IDLE;
+  static bool      lastMixReady  = false;
+
   handleAutoMixingLogic();
   handleAutoIrrigationLogic();
+
+  if (autoState != lastAutoState || mixState != lastMixState || isMixingReady != lastMixReady) {
+    lastAutoState = autoState;
+    lastMixState  = mixState;
+    lastMixReady  = isMixingReady;
+    statusReportPending = true;
+  }
+
   handleNextionIncoming();
 
   if (millis() - lastUpdate >= 1000UL) {
@@ -1399,3 +1562,9 @@ void loop() {
 
   delay(1);
 }
+
+
+
+
+
+

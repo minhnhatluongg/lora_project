@@ -19,8 +19,13 @@
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // ===================== RS485 MODBUS (UART1) =====================
-HardwareSerial Serial1(PA10, PA9); 
-#define RS485_Serial Serial1 
+// Doi ten khoi Serial1: core STM32duino DA tu dinh nghia bien Serial1 khi
+// ENABLE_HWSERIAL1 bat, nen khai bao them mot Serial1 nua lam trinh lien ket
+// bao "multiple definition of Serial1" va khong build duoc. Chi doi TEN BIEN;
+// van la UART1 tren dung hai chan PA10/PA9, moi cho khac dung RS485_Serial
+// nen khong phai sua gi them.
+HardwareSerial rs485Port(PA10, PA9);
+#define RS485_Serial rs485Port
 const uint8_t SENSOR_ID = 0x02; 
 
 // ===================== LORA E32 (UART2) =====================
@@ -445,3 +450,9 @@ void loop() {
     handleLoraIncoming();   // vẫn lắng nghe trong lúc chờ, để không trễ trả lời REQ_DATA
   }
 }
+
+
+
+
+
+

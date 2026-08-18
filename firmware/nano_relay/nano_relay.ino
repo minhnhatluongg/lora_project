@@ -1,3 +1,7 @@
+// Chuoi hang trong Serial.print duoc boc F() de nam o FLASH thay vi RAM.
+// ATmega328P chi co 2KB RAM; ban chua boc dung 1825 byte (89%) va chi con 223
+// byte cho stack, trong khi code nay dung String rat nhieu - heap lon len dung
+// stack la reset ngau nhien giua chung, dung luc dang dieu khien relay.
 #include <SoftwareSerial.h>
 
 // 1. CỔNG UART NANO 1 (TỦ ĐIỆN)
@@ -173,7 +177,7 @@ void turnOff(int index, String sourceCmd) {
 // chưa hề được thực thi.
 // =================================================================
 void processLoraCommand(String cmd) {
-  Serial.println("\n------------------------------------------------");
+  Serial.println(F("\n------------------------------------------------"));
   Serial.println(">> [LORA RX <- ESP32] Nhận lệnh: " + cmd);
 
   if (cmd == "<ESTOP>") {
@@ -181,9 +185,9 @@ void processLoraCommand(String cmd) {
       digitalWrite(relayPins[i], LOW);
     }
     isAutoMode = false; isManualMode = false;
-    Serial.println(" -> THỰC THI: DỪNG KHẨN CẤP (E-STOP) TOÀN BỘ RELAY!");
+    Serial.println(F(" -> THỰC THI: DỪNG KHẨN CẤP (E-STOP) TOÀN BỘ RELAY!"));
     sendLoraAck(cmd);
-    Serial.println("------------------------------------------------");
+    Serial.println(F("------------------------------------------------"));
     return;
   }
   else if (cmd == "<SET_MODE=AUTO>") {
@@ -196,9 +200,9 @@ void processLoraCommand(String cmd) {
   }
   else if (cmd.startsWith("<AUTOON") && cmd.endsWith(">")) {
     if (isAutoMode != true) {
-      Serial.println(" -> [DESYNC] Lệnh AUTO nhưng Nano đang ở MANUAL, từ chối!");
+      Serial.println(F(" -> [DESYNC] Lệnh AUTO nhưng Nano đang ở MANUAL, từ chối!"));
       sendLoraNack(cmd);
-      Serial.println("------------------------------------------------");
+      Serial.println(F("------------------------------------------------"));
       return;
     }
     int relayNum = cmd.substring(7, cmd.length() - 1).toInt();
@@ -208,9 +212,9 @@ void processLoraCommand(String cmd) {
   }
   else if (cmd.startsWith("<AUTOOFF") && cmd.endsWith(">")) {
     if (isAutoMode != true) {
-      Serial.println(" -> [DESYNC] Lệnh AUTO nhưng Nano đang ở MANUAL, từ chối!");
+      Serial.println(F(" -> [DESYNC] Lệnh AUTO nhưng Nano đang ở MANUAL, từ chối!"));
       sendLoraNack(cmd);
-      Serial.println("------------------------------------------------");
+      Serial.println(F("------------------------------------------------"));
       return;
     }
     int relayNum = cmd.substring(8, cmd.length() - 1).toInt();
@@ -220,9 +224,9 @@ void processLoraCommand(String cmd) {
   }
   else if (cmd.startsWith("<ON") && cmd.endsWith(">")) {
     if (isAutoMode == true) {
-      Serial.println(" -> [KHÓA AN TOÀN] Đang ở AUTO, từ chối bật tay từ Lora!");
+      Serial.println(F(" -> [KHÓA AN TOÀN] Đang ở AUTO, từ chối bật tay từ Lora!"));
       sendLoraNack(cmd);
-      Serial.println("------------------------------------------------");
+      Serial.println(F("------------------------------------------------"));
       return;
     }
     int relayNum = cmd.substring(3, cmd.length() - 1).toInt();
@@ -232,9 +236,9 @@ void processLoraCommand(String cmd) {
   }
   else if (cmd.startsWith("<OFF") && cmd.endsWith(">")) {
     if (isAutoMode == true) {
-      Serial.println(" -> [KHÓA AN TOÀN] Đang ở AUTO, từ chối tắt tay từ Lora!");
+      Serial.println(F(" -> [KHÓA AN TOÀN] Đang ở AUTO, từ chối tắt tay từ Lora!"));
       sendLoraNack(cmd);
-      Serial.println("------------------------------------------------");
+      Serial.println(F("------------------------------------------------"));
       return;
     }
     int relayNum = cmd.substring(4, cmd.length() - 1).toInt();
@@ -243,11 +247,11 @@ void processLoraCommand(String cmd) {
     }
   }
   else {
-    Serial.println(" -> [CẢNH BÁO] Lệnh LoRa không thuộc danh sách xử lý!");
+    Serial.println(F(" -> [CẢNH BÁO] Lệnh LoRa không thuộc danh sách xử lý!"));
   }
 
   sendLoraAck(cmd);
-  Serial.println("------------------------------------------------");
+  Serial.println(F("------------------------------------------------"));
 }
 
 // =================================================================
@@ -268,9 +272,9 @@ void setup() {
   uart.listen();
 
   delay(500);
-  Serial.println("==================================================");
-  Serial.println("--- NANO 2 (SLAVE): SAN SANG NHAN LORA & TU DIEN ---");
-  Serial.println("==================================================");
+  Serial.println(F("=================================================="));
+  Serial.println(F("--- NANO 2 (SLAVE): SAN SANG NHAN LORA & TU DIEN ---"));
+  Serial.println(F("=================================================="));
 }
 
 // =================================================================
@@ -287,25 +291,25 @@ void loop() {
     // --- XỬ LÝ GẠT CÔNG TẮC CHẾ ĐỘ + GỬI ĐỒNG BỘ LÊN HMI ---
     if (s == "A0_ON") {
       isAutoMode = true; isManualMode = false;
-      Serial.println(">>> NANO 2: DA BAT CHE DO AUTO (A0 = ON) <<<");
+      Serial.println(F(">>> NANO 2: DA BAT CHE DO AUTO (A0 = ON) <<<"));
       turnOn(9, "TU_DIEN_AUTO");
       sendLoraModeSync(1); // Gửi MODE=1 (Auto) lên ESP32 HMI
     }
     else if (s == "A0_OFF") {
       isAutoMode = false;
-      Serial.println(">>> NANO 2: DA TAT CHE DO AUTO (A0 = OFF) <<<");
+      Serial.println(F(">>> NANO 2: DA TAT CHE DO AUTO (A0 = OFF) <<<"));
       turnOff(9, "TU_DIEN_STOP");
       sendLoraModeSync(-1); // Gửi MODE=-1 (Stop) lên ESP32 HMI
     }
     else if (s == "A1_ON") {
       isManualMode = true; isAutoMode = false;
-      Serial.println(">>> NANO 2: DA BAT CHE DO MANUAL (A1 = ON) <<<");
+      Serial.println(F(">>> NANO 2: DA BAT CHE DO MANUAL (A1 = ON) <<<"));
       turnOff(9, "TU_DIEN_MANUAL");
       sendLoraModeSync(0); // Gửi MODE=0 (Manual) lên ESP32 HMI
     }
     else if (s == "A1_OFF") {
       isManualMode = false;
-      Serial.println(">>> NANO 2: DA TAT CHE DO MANUAL (A1 = OFF) <<<");
+      Serial.println(F(">>> NANO 2: DA TAT CHE DO MANUAL (A1 = OFF) <<<"));
       sendLoraModeSync(-1); // Gửi MODE=-1 (Stop) lên ESP32 HMI
     }
     else if (isAutoMode == false) {
@@ -319,11 +323,11 @@ void loop() {
       else if (s == "D14_ON") turnOn(7, s);  else if (s == "D14_OFF") turnOff(7, s);
       else if (s == "D15_ON") turnOn(8, s);  else if (s == "D15_OFF") turnOff(8, s);
       else { 
-        Serial.print("  -> [LOI] Lenh khong hop le: "); Serial.println(s);
+        Serial.print(F("  -> [LOI] Lenh khong hop le: ")); Serial.println(s);
       }
     }
     else {
-      Serial.print("  -> [KHOA AN TOAN] Tu choi nut tay do dang o AUTO: ");
+      Serial.print(F("  -> [KHOA AN TOAN] Tu choi nut tay do dang o AUTO: "));
       Serial.println(s);
     }
   }
@@ -355,3 +359,9 @@ void loop() {
     uart.listen();
   }
 }
+
+
+
+
+
+
