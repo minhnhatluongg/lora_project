@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import logoUrl from '../assets/logo.jpg';
 import {
   IconHome,
   IconWifi,
@@ -54,20 +55,18 @@ function CircuitTrace({ flip = false }) {
   );
 }
 
-// The FPT mark: white letters on the blue / orange / green tiles of the real
-// logotype, then "Education" in blue. The tile colours are the darkened family
-// used everywhere else in this stylesheet so white-on-tile still clears AA.
+// Logo chính thức của trường. Trước đây khối này vẽ lại chữ FPT bằng ba ô màu,
+// vì chưa có file ảnh; nay dùng ảnh thật trong img/ nên bỏ hẳn phần vẽ tay để
+// không có hai phiên bản nhận diện lệch nhau.
 function BrandMark() {
   return (
-    <span className="pageshell-brand-main">
-      <span className="pageshell-fpt" aria-hidden="true">
-        <b className="pageshell-fpt-f">F</b>
-        <b className="pageshell-fpt-p">P</b>
-        <b className="pageshell-fpt-t">T</b>
-      </span>
-      <span className="pageshell-brand-edu">Education</span>
-      <span className="pageshell-sr">FPT Education</span>
-    </span>
+    <img
+      className="pageshell-logo"
+      src={logoUrl}
+      alt="FPT Education — FPT Polytechnic"
+      width="1260"
+      height="428"
+    />
   );
 }
 
@@ -164,7 +163,6 @@ export function PageShell({ title, onBack, children, actions, connected = null }
         <div className="pageshell-brandwrap">
           <div className="pageshell-brand">
             <BrandMark />
-            <span className="pageshell-brand-sub">FPT POLYTECHNIC</span>
           </div>
           <span className="pageshell-sep" aria-hidden="true" />
         </div>

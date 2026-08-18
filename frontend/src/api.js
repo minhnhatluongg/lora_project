@@ -82,6 +82,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ engaged }),
     }),
+  // Commissioning sweep: switch every actuator on, valves first, two seconds
+  // apart. THỦ CÔNG only — in TỰ ĐỘNG the relay board refuses manual commands.
+  testPanel: () => req('/api/status/test-panel', { method: 'POST' }),
 
   // --- alerts -------------------------------------------------------------
   alerts: (limit = 10) => req(`/api/alerts?limit=${limit}`),

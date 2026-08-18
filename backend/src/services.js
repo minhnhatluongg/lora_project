@@ -65,7 +65,57 @@ export function getStatus() {
     sensorErrorAt: row.sensor_error_at,
     // DỪNG KHẨN CẤP — see setEmergencyStop() for what it inhibits.
     eStop: !!row.e_stop,
+    // What the field engine is doing right now. The AUTO and mixing state
+    // machines run on the ESP32 with no network, so these only mean anything
+    // while the master is reporting; null = we have not heard.
+    autoState: row.auto_state || null,
+    mixState: row.mix_state || null,
+    mixReady: !!row.mix_ready,
+    engineSeenAt: row.engine_seen_at || null,
   };
+}
+
+// The master telling us what it is actually doing: which mode the panel is in
+// (it can be changed at the Nextion or by the cabinet switch, where the web
+// never sees it) and which step each state machine has reached.
+//
+// Every field is optional; absent means "no news", not "cleared".
+export function reportFromMaster({ mode, autoState, mixState, mixReady } = {}) {
+  const sets = [];
+  const params = [];
+  const before = getStatus().mode;
+
+  if (mode === 'AUTO' || mode === 'MANUAL' || mode === 'NONE') {
+    sets.push(`mode = ?`);
+    params.push(mode);
+  }
+  if (typeof autoState === 'string' && autoState) {
+    sets.push(`auto_state = ?`);
+    params.push(autoState);
+  }
+  if (typeof mixState === 'string' && mixState) {
+    sets.push(`mix_state = ?`);
+    params.push(mixState);
+  }
+  if (mixReady !== undefined) {
+    sets.push(`mix_ready = ?`);
+    params.push(mixReady ? 1 : 0);
+  }
+  if (!sets.length) return getStatus();
+
+  sets.push(`engine_seen_at = datetime('now')`);
+  db.prepare(`UPDATE system_status SET ${sets.join(', ')} WHERE id = 1`).run(...params);
+
+  // A mode change made at the panel is worth an alert line — otherwise someone
+  // reading the log later cannot tell why the rig started or stopped irrigating.
+  if (mode && mode !== before) {
+    const label = { AUTO: 'TỰ ĐỘNG', MANUAL: 'THỦ CÔNG', NONE: 'CHƯA CHỌN' }[mode];
+    createAlert('info', `Chế độ đổi thành ${label} từ tủ điện / màn HMI`);
+  }
+
+  const status = getStatus();
+  emit(EVENTS.STATUS, status);
+  return status;
 }
 
 export function setMode(mode) {

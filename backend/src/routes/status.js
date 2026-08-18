@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { asyncH, deviceOrUserAuth } from '../middleware.js';
+import { asyncH, deviceAuth, deviceOrUserAuth } from '../middleware.js';
 import { requireAuth, canControl } from '../auth.js';
 import {
   getStatus,
@@ -7,6 +7,7 @@ import {
   enqueueCommand,
   enqueueAllDevices,
   PANEL_STAGGER_SECONDS,
+  reportFromMaster,
   setEmergencyStop,
   isEStopEngaged,
 } from '../services.js';
@@ -53,29 +54,77 @@ statusRouter.post(
         eStop: true,
       });
 
-    // Picking AUTO energises the whole panel — valves first, two seconds apart —
-    // and only then hands control over.
-    //
-    // The ORDER is load-bearing: nano_relay.ino refuses every manual ON once it
-    // is already in AUTO ("KHÓA AN TOÀN"), and esp32_master.ino rejects them one
-    // step earlier for the same reason. Queued after the mode change these nine
-    // commands would all come back refused; queued ahead of it they are still
-    // seen as manual presses and are applied.
-    //
-    // Being last in the queue is not enough on its own: a master polling with a
-    // high ?limit would collect the mode change in the same batch as the first
-    // pump. So the mode command gets a run_after one step past the final
-    // actuator, which orders it in TIME as well as in id.
-    let modeDelay = 0;
-    if (mode === 'AUTO') {
-      modeDelay =
-        enqueueAllDevices('ON', { staggerSeconds: PANEL_STAGGER_SECONDS }) +
-        PANEL_STAGGER_SECONDS;
-    }
-
-    enqueueCommand('mode', mode, { delaySeconds: modeDelay });
+    // Picking AUTO hands the panel to the field engine — it does NOT switch
+    // everything on. The mixing and irrigation state machines live on the ESP32
+    // and decide what runs, in what order, with the tank-empty and rain
+    // interlocks the backend does not have. An earlier version energised all
+    // nine actuators here; the engine simply overrode it seconds later, and
+    // starting the nutrient pumps before anything had been mixed was wrong on
+    // its own terms. Switching the whole panel on is now a separate, explicit
+    // commissioning action — see POST /api/status/test-panel.
+    enqueueCommand('mode', mode);
     setMode(mode);
     res.json(getStatus());
+  })
+);
+
+// POST /api/status/report -> the master telling us what it is actually doing.
+//
+// Mode can be changed in three places: this dashboard, the Nextion screen on the
+// panel, and the mechanical switch inside the cabinet. Only the first went
+// through us, so the web could sit showing THỦ CÔNG while the rig had been in
+// TỰ ĐỘNG for an hour. The master now reports every change here.
+//
+// The same call carries the AUTO and mixing state-machine steps, which is the
+// only way the dashboard can show what the field engine is doing — those
+// machines run on the ESP32 and keep running with the network down.
+//
+// Body: { mode?, autoState?, mixState?, mixReady? } — all optional.
+statusRouter.post(
+  '/report',
+  deviceAuth,
+  asyncH((req, res) => {
+    const b = req.body || {};
+    res.json(
+      reportFromMaster({
+        mode: b.mode ? String(b.mode).toUpperCase() : undefined,
+        autoState: b.autoState ?? b.auto_state,
+        mixState: b.mixState ?? b.mix_state,
+        mixReady: b.mixReady ?? b.mix_ready,
+      })
+    );
+  })
+);
+
+// POST /api/status/test-panel -> commissioning sweep: switch every actuator on,
+// valves first, two seconds apart.
+//
+// This is what the AUTO button used to do implicitly. As its own action it is
+// honest about being a test, and it is available exactly when it is useful —
+// checking the cabinet wiring relay by relay before handing over to AUTO.
+//
+// The stagger is not cosmetic: five pump motors closing together is an inrush
+// the shared supply should never have to swallow, and a pump started against a
+// shut valve is dead-heading into a closed line.
+statusRouter.post(
+  '/test-panel',
+  requireAuth,
+  canControl,
+  asyncH((req, res) => {
+    if (isEStopEngaged())
+      return res.status(409).json({
+        error: 'Đang DỪNG KHẨN CẤP — không thể chạy kiểm tra dàn.',
+        eStop: true,
+      });
+    if (getStatus().mode !== 'MANUAL')
+      return res.status(409).json({
+        error: 'Chỉ chạy được ở chế độ THỦ CÔNG. Ở TỰ ĐỘNG, tủ điện từ chối mọi lệnh tay.',
+      });
+
+    const seconds =
+      enqueueAllDevices('ON', { staggerSeconds: PANEL_STAGGER_SECONDS }) +
+      PANEL_STAGGER_SECONDS;
+    res.json({ ok: true, seconds, status: getStatus() });
   })
 );
 

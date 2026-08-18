@@ -63,7 +63,15 @@ db.exec(`
     slave_seen_at   TEXT,
     sensor_status   TEXT,           -- 'OK' | 'CRC' | 'HEADER' | 'TIMEOUT' | 'SHORT'
     sensor_error_at TEXT,
-    e_stop          INTEGER NOT NULL DEFAULT 0  -- 1 = DỪNG KHẨN CẤP engaged
+    e_stop          INTEGER NOT NULL DEFAULT 0, -- 1 = DỪNG KHẨN CẤP engaged
+    -- What the field engine is actually doing, reported by the master. The AUTO
+    -- and mixing state machines live on the ESP32 and run with no network, so
+    -- without this the dashboard can only show "AUTO" and a row of dead
+    -- switches — it cannot say which step is in progress.
+    auto_state      TEXT,           -- AUTO_IDLE | AUTO_OPEN_VALVE | ...
+    mix_state       TEXT,           -- MIX_IDLE | MIX_ADD_WATER | ...
+    mix_ready       INTEGER NOT NULL DEFAULT 0,
+    engine_seen_at  TEXT
   );
 
   -- Command queue: frontend enqueues, ESP32 master polls + acks.
@@ -277,6 +285,27 @@ if (Number(getMeta('schema_version') || 1) < 8) {
     console.log(`[db] migrated: thêm cột commands.run_after (giãn cách lệnh theo thời gian)`);
   }
   setMeta('schema_version', 8);
+}
+
+// v9: the dashboard could show WHICH mode the panel was in but never what the
+// field engine was doing inside it. Four columns carry the master's report so
+// the CONTROL screen can draw the mixing and irrigation steps as they happen.
+if (Number(getMeta('schema_version') || 1) < 9) {
+  const have = new Set(
+    db.prepare(`SELECT name FROM pragma_table_info('system_status')`).all().map((r) => r.name)
+  );
+  const added = [];
+  for (const [col, decl] of [
+    ['auto_state', `ALTER TABLE system_status ADD COLUMN auto_state TEXT`],
+    ['mix_state', `ALTER TABLE system_status ADD COLUMN mix_state TEXT`],
+    ['mix_ready', `ALTER TABLE system_status ADD COLUMN mix_ready INTEGER NOT NULL DEFAULT 0`],
+    ['engine_seen_at', `ALTER TABLE system_status ADD COLUMN engine_seen_at TEXT`],
+  ]) {
+    if (!have.has(col)) { db.prepare(decl).run(); added.push(col); }
+  }
+  if (added.length)
+    console.log(`[db] migrated: thêm ${added.join(', ')} vào system_status`);
+  setMeta('schema_version', 9);
 }
 
 // --- Seed default rows if missing -------------------------------------------

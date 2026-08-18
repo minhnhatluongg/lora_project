@@ -638,3 +638,105 @@
   .ctrl-modes { grid-template-columns: 1fr; }
   .ctrl-estop { flex-direction: column; gap: 6px; }
 }
+
+/* --- Dải tiến trình máy trạng thái (chỉ hiện khi TỰ ĐỘNG) ----------------- */
+/* Mỗi hàng một máy: tên · thanh phân đoạn · bước đang chạy. Gọn hết mức vì trên
+   panel 1024x600 dải này chen giữa khối CHẾ ĐỘ và khối VAN — mỗi pixel thừa ở
+   đây là một pixel cắt mất công tắc van bên dưới. */
+.eflow { display: flex; flex-direction: column; gap: 3px; padding: 3px 2px 0; }
+.eflow-empty { margin: 0; padding: 5px 2px; font-size: 11.5px; color: #5b667f; }
+
+.eflow-track {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  grid-template-areas: "title bar" "title now";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+}
+.eflow-track-title {
+  grid-area: title;
+  align-self: center;
+  font-size: 11px; font-weight: 700; color: var(--ctrl-navy);
+}
+
+.eflow-bar { grid-area: bar; display: flex; gap: 3px; }
+.eflow-seg {
+  flex: 1 1 0; height: 5px; border-radius: 3px; background: #dbe2ee;
+}
+
+/* Đã qua / đang chạy / chưa tới. Bước đang chạy còn được nhắc lại bằng CHỮ ở
+   dòng dưới, nên người không phân biệt được màu vẫn đọc ra. */
+.eflow-seg.is-past { background: var(--ok, #15803d); }
+.eflow-seg.is-now  { background: var(--blue, #2563eb); animation: eflow-pulse 1.2s ease-in-out infinite; }
+
+.eflow-now {
+  grid-area: now;
+  font-size: 11px; font-weight: 700; color: var(--blue, #2563eb);
+  line-height: 1.2;
+}
+.eflow-now.is-done { color: var(--ok, #15803d); }
+
+.eflow-gate {
+  margin: 0; padding-left: 66px;
+  font-size: 10px; font-weight: 600; color: #b45309; line-height: 1.2;
+}
+.eflow-gate.is-open { color: var(--ok, #15803d); }
+
+@keyframes eflow-pulse { 50% { opacity: 0.4; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .eflow-seg.is-now { animation: none; }
+}
+
+/* Nút quét toàn dàn — chỉ hiện ở THỦ CÔNG */
+.ctrl-test { display: flex; flex-direction: column; gap: 4px; padding: 2px 0 0; }
+.ctrl-test-btn {
+  align-self: flex-start; padding: 6px 12px; border-radius: 8px;
+  border: 1px solid #bcccf0; background: #fafbff; color: var(--ctrl-navy);
+  font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.ctrl-test-btn:hover:not(:disabled) { border-color: var(--blue, #2563eb); background: #f2f6ff; }
+.ctrl-test-btn:disabled { cursor: not-allowed; color: #5b667f; background: #f4f6fb; border-color: #dbe2ee; }
+
+/* --- Tiến trình quét toàn dàn ------------------------------------------- */
+.ctrl-sweep { display: flex; flex-direction: column; gap: 5px; padding-top: 2px; }
+
+.ctrl-sweep-bar {
+  height: 8px; border-radius: 5px; background: #e4eaf5;
+  overflow: hidden; border: 1px solid #d3dcec;
+}
+.ctrl-sweep-fill {
+  display: block; height: 100%; border-radius: 4px;
+  background: var(--blue, #2563eb);
+  transition: width 0.25s linear;
+}
+
+.ctrl-sweep-text {
+  margin: 0; display: flex; justify-content: space-between; gap: 8px;
+  font-size: 11.5px; color: #5b667f;
+}
+.ctrl-sweep-text strong { color: var(--blue, #2563eb); font-weight: 700; }
+
+/* Báo xong: nền xanh nhạt, viền trái đậm — đọc được cả khi không phân biệt màu
+   vì có dấu ✓ và chữ, không chỉ dựa vào màu nền. */
+.ctrl-sweep-done {
+  margin: 4px 0 0; padding: 7px 10px;
+  display: flex; align-items: flex-start; gap: 7px;
+  font-size: 12px; font-weight: 600; line-height: 1.35;
+  color: #14532d; background: #eafaf0;
+  border: 1px solid #b7e4c7; border-left: 3px solid var(--ok, #15803d);
+  border-radius: 7px;
+  animation: ctrl-sweep-in 0.22s ease-out;
+}
+.ctrl-sweep-tick { font-weight: 800; color: var(--ok, #15803d); line-height: 1.2; }
+
+@keyframes ctrl-sweep-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctrl-sweep-fill { transition: none; }
+  .ctrl-sweep-done { animation: none; }
+}
