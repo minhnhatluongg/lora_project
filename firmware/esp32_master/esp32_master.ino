@@ -420,6 +420,18 @@ void pollWebCommands() {
     if (devId == "mode") { safelySwitchMode(action == "AUTO" ? 1 : 0); webCommandId = id; return; }
     if (action == "ESTOP" || devId == "estop") { enqueueEmergencyStop(); webCommandId = id; return; }
 
+    // Nut "Lay du lieu ngay" tren dashboard web. Lam dung viec ma nut b2 tren
+    // man Nextion vua lam: xin STM32 mot goi do moi thay vi cho vong hoi ke tiep.
+    // isCommandInQueue chong bam don — bam muoi phat van chi mot lenh di ra.
+    if (devId == "system" && action == "GET_DATA") {
+      if (!isCommandInQueue("<A:GET_DATA>")) {
+        enqueueCommand("<A:GET_DATA>");
+        updateOLED("LORA TX:", "Yeu cau Data (Web)");
+      }
+      webCommandId = id;
+      return;
+    }
+
     if (devId.startsWith("pump") || devId.startsWith("van")) {
       if (systemMode != 0) { setWebAckResult(id, false); return; }
       bool isON = (action == "ON"); int relayPin = -1;

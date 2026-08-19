@@ -83,7 +83,7 @@ const LINK_STATE = {
   },
 };
 
-export function PageShell({ title, onBack, children, actions, connected = null }) {
+export function PageShell({ title, onBack, children, actions, titleAction, connected = null }) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -194,10 +194,14 @@ export function PageShell({ title, onBack, children, actions, connected = null }
         </div>
       </header>
 
+      {/* titleAction ngồi cạnh tiêu đề, không xuống chân trang: nút "lấy dữ liệu
+          ngay" đặt ở đây để khớp đúng vị trí nút LoRa trên màn Nextion, nên
+          người quen bấm dưới tủ sang web là tìm thấy ngay. */}
       <div className="pageshell-titlebar">
         <CircuitTrace />
         <h1 className="pageshell-title">{title}</h1>
         <CircuitTrace flip />
+        {titleAction ? <div className="pageshell-titleaction">{titleAction}</div> : null}
       </div>
 
       <div className="pageshell-body">{children}</div>

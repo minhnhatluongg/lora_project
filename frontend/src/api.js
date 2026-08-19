@@ -98,6 +98,8 @@ export const api = {
   // Reboots the FIELD unit, not this server: the backend queues a RESTART
   // command the ESP32 master picks up on its next poll -> { ok, queued, commandId }.
   restartSystem: () => req('/api/system/restart', { method: 'POST' }),
+  // Xin STM32 một gói đo mới ngay, không chờ vòng hỏi kế tiếp.
+  fetchNow: () => req('/api/system/fetch-now', { method: 'POST' }),
   // Admin only. Resets app_config to the factory defaults and returns the new
   // config; users, telemetry and the alert log are left alone.
   restoreDefaults: () => req('/api/system/restore-defaults', { method: 'POST' }),

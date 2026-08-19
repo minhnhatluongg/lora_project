@@ -146,6 +146,17 @@ body {
 .pageshell-titlebar {
   display: flex; align-items: center; justify-content: center;
   gap: 24px; margin: 2px 0 26px;
+  position: relative;
+}
+
+/* Neo phải, tách khỏi luồng canh giữa để tiêu đề vẫn nằm chính giữa màn hình dù
+   có nút hay không — thanh tiêu đề không được xê dịch giữa các trang. */
+.pageshell-titleaction {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center;
+  /* Khoi noi dung nam SAU trong DOM nen mac dinh ve de len. Nut nay co the bung
+     ra mot dong thong bao chom xuong duoi, phai nang ca cum len tren no. */
+  z-index: 20;
 }
 .pageshell-title {
   margin: 0; font-size: 42px; line-height: 1.1; font-weight: 800;

@@ -429,3 +429,41 @@
   .dash-row-secondary { grid-template-columns: 1fr; }
   .dash-card-tanks { grid-column: auto; }
 }
+
+/* --- Nút "Lấy dữ liệu ngay" cạnh tiêu đề ---------------------------------- */
+/* z-index: dong thong bao noi ben duoi nut, ma hang the do luong ngay sat phia
+   duoi va tao ngu canh xep chong rieng — khong nang len thi bi cat mat mot nua. */
+.dash-fetch { position: relative; display: flex; flex-direction: column; align-items: flex-end; z-index: 5; }
+
+.dash-fetch-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px; border-radius: 10px;
+  border: 1px solid #bcccf0; background: #fff; color: #1d4ed8;
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.dash-fetch-btn:hover:not(:disabled) { background: #f2f6ff; border-color: #2563eb; }
+.dash-fetch-btn:active:not(:disabled) { transform: translateY(1px); }
+.dash-fetch-btn:disabled { cursor: progress; color: #5b667f; background: #f4f6fb; border-color: #dbe2ee; }
+.dash-fetch-icon { line-height: 0; }
+.dash-fetch-btn.is-busy .dash-fetch-icon { animation: dash-spin 1.1s linear infinite; }
+
+/* Nổi lên trên, không chiếm chỗ trong luồng — nếu không thanh tiêu đề sẽ cao
+   thêm một dòng ngay lúc bấm và cả trang nhảy xuống. */
+.dash-fetch-msg {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 6;
+  margin: 0; padding: 6px 10px; max-width: 280px;
+  box-shadow: 0 4px 10px rgba(16, 24, 40, 0.12);
+  font-size: 11.5px; font-weight: 600; line-height: 1.3; text-align: right;
+  color: #1e40af; background: #eef4ff;
+  border: 1px solid #c7d7f5; border-radius: 8px;
+  white-space: normal;
+}
+.dash-fetch-msg.is-bad { color: #991b1b; background: #fef2f2; border-color: #f3c5c5; }
+
+@keyframes dash-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-fetch-btn.is-busy .dash-fetch-icon { animation: none; }
+}

@@ -25,6 +25,26 @@ systemRouter.post(
   })
 );
 
+// POST /api/system/fetch-now
+// "Lấy dữ liệu ngay" on the dashboard. The STM32 only transmits when asked, so
+// without this an operator waits out the poll interval to see a fresh reading.
+// The master translates this into <A:GET_DATA> on the LoRa link — the same thing
+// the b2 button on the Nextion dashboard does, just reachable from the web.
+//
+// Any logged-in user may press it: it reads, it does not actuate anything.
+systemRouter.post(
+  '/fetch-now',
+  requireAuth,
+  asyncH((req, res) => {
+    // Superseding is what we want here rather than a queue of identical
+    // requests: two people pressing it three seconds apart should cost one LoRa
+    // transaction, not six. enqueueCommand already supersedes outstanding
+    // commands for the same device id, and the master dedupes again on its side.
+    const cmd = enqueueCommand('system', 'GET_DATA');
+    res.json({ ok: true, queued: true, commandId: cmd.id });
+  })
+);
+
 // POST /api/system/restore-defaults  (admin only)
 // "KHÔI PHỤC CÀI ĐẶT TRƯỚC": puts thresholds, watering times, tank calibration
 // and automation rules back to the factory values from db.js. Deliberately
