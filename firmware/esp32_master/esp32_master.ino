@@ -55,6 +55,23 @@ const unsigned long WEB_POLL_INTERVAL = 3000UL, TELEMETRY_INTERVAL = 3000UL, STA
 String systemPassword; 
 unsigned long lastUpdate = 0; 
 int systemMode = -1;  
+// --- DON VI EC ---------------------------------------------------------------
+// EC_Value tu dau do RS485 la uS/cm (co 1500). Nguong ecMin/ecMax truoc day mac
+// dinh 1.0 va 2.0 tuc mS/cm, roi dem so THANG voi EC_Value, nen "EC_Value >
+// ecMax" luon dung: may pha phan ket vinh vien o buoc pha loang, khong bao gio
+// bat isMixingReady, va tuoi tu dong khong bao gio khoi dong.
+// Giu nguyen y dinh nong hoc (1.0 va 2.0 mS/cm), chi doi don vi cho khop.
+const float EC_MIN_DEFAULT = 1000.0;  // = 1.0 mS/cm
+const float EC_MAX_DEFAULT = 2000.0;  // = 2.0 mS/cm
+
+// Nhan so EC o bat ky don vi nao roi tra ve uS/cm. Can vi chip da nap firmware
+// cu con giu 1.0/2.0 trong Flash, va nguoi van hanh quen tay co the go "1.5".
+// Khong dung dich tuoi nao chi 50 uS/cm (gan bang nuoc cat) nen duoi nguong do
+// chac chan la dang noi mS/cm. Backend cung dung dung phep suy luan nay.
+float ecToMicro(float v) {
+  return (v > 0.0 && v < 50.0) ? v * 1000.0 : v;
+}
+
 bool pumpState[5] = {false, false, false, false, false}; 
 bool valveState[4] = {false, false, false, false};
 
@@ -618,7 +635,9 @@ void processNextionCommand(String rawCmd) {
   if (cmdUpper.startsWith("SAVE=")) {
     String data = cmdUpper.substring(5);
     float nPhMin = getValue(data, ',', 0).toFloat(), nPhMax = getValue(data, ',', 1).toFloat();
-    float nEcMin = getValue(data, ',', 2).toFloat(), nEcMax = getValue(data, ',', 3).toFloat();
+    // Quy ve uS/cm ngay tai cua vao, de Flash chi chua mot don vi duy nhat du
+    // nguoi van hanh go "1.5" (quen tay mS/cm) hay "1500".
+    float nEcMin = ecToMicro(getValue(data, ',', 2).toFloat()), nEcMax = ecToMicro(getValue(data, ',', 3).toFloat());
     float nTempMin = getValue(data, ',', 4).toFloat(), nTempMax = getValue(data, ',', 5).toFloat();
     float nHumMin = getValue(data, ',', 6).toFloat(), nHumMax = getValue(data, ',', 7).toFloat();
     int nTimeBom = getValue(data, ',', 8).toInt(), nTimeNghi = getValue(data, ',', 9).toInt();
@@ -634,7 +653,7 @@ void processNextionCommand(String rawCmd) {
 
   if (cmdUpper.indexOf("CMD=REBOOT") >= 0) { updateOLED("SYSTEM", "Rebooting..."); sendNextionCmd("page page0"); delay(1000); ESP.restart(); }
   if (cmdUpper.indexOf("CMD=RESTORE") >= 0) {
-    phMin = 5.5; phMax = 6.5; ecMin = 1.0; ecMax = 2.0; tempMin = 22.0; tempMax = 35.0; humMin = 65.0; humMax = 80.0; timeBom = 10; timeNghi = 15;
+    phMin = 5.5; phMax = 6.5; ecMin = EC_MIN_DEFAULT; ecMax = EC_MAX_DEFAULT; tempMin = 22.0; tempMax = 35.0; humMin = 65.0; humMax = 80.0; timeBom = 10; timeNghi = 15;
     preferences.begin("system_data", false);
     preferences.putFloat("phMin", phMin); preferences.putFloat("phMax", phMax); preferences.putFloat("ecMin", ecMin); preferences.putFloat("ecMax", ecMax);
     preferences.putFloat("tempMin", tempMin); preferences.putFloat("tempMax", tempMax); preferences.putFloat("humMin", humMin); preferences.putFloat("humMax", humMax);
@@ -656,7 +675,7 @@ void setup() {
   loraSerial.setRxBufferSize(512); loraSerial.begin(9600, SERIAL_8N1, LORA_RX_PIN, LORA_TX_PIN); loraSerial.setTimeout(20); 
   while (loraSerial.available()) loraSerial.read();
   nextion.begin(115200, SERIAL_8N1, NEXTION_RX, NEXTION_TX); nextion.setTimeout(20); delay(500); while (nextion.available()) nextion.read();
-  preferences.begin("system_data", false); systemPassword = preferences.getString("password", "123456"); phMin = preferences.getFloat("phMin", 5.5); phMax = preferences.getFloat("phMax", 6.5); ecMin = preferences.getFloat("ecMin", 1.0); ecMax = preferences.getFloat("ecMax", 2.0); tempMin = preferences.getFloat("tempMin", 22.0); tempMax = preferences.getFloat("tempMax", 35.0); humMin = preferences.getFloat("humMin", 65.0); humMax = preferences.getFloat("humMax", 80.0); timeBom = preferences.getInt("timeBom", 10); timeNghi = preferences.getInt("timeNghi", 15); preferences.end();
+  preferences.begin("system_data", false); systemPassword = preferences.getString("password", "123456"); phMin = preferences.getFloat("phMin", 5.5); phMax = preferences.getFloat("phMax", 6.5); ecMin = ecToMicro(preferences.getFloat("ecMin", EC_MIN_DEFAULT)); ecMax = ecToMicro(preferences.getFloat("ecMax", EC_MAX_DEFAULT)); tempMin = preferences.getFloat("tempMin", 22.0); tempMax = preferences.getFloat("tempMax", 35.0); humMin = preferences.getFloat("humMin", 65.0); humMax = preferences.getFloat("humMax", 80.0); timeBom = preferences.getInt("timeBom", 10); timeNghi = preferences.getInt("timeNghi", 15); preferences.end();
   WiFi.mode(WIFI_STA); WiFi.begin(ssid, password); updateOLED("WIFI", "Connecting...");
   int wifiAttempts = 0; while (WiFi.status() != WL_CONNECTED && wifiAttempts < 20) { delay(500); wifiAttempts++; }
   if (WiFi.status() == WL_CONNECTED) { configTime(gmtOffset_sec, daylightOffset_sec, ntpServer); updateOLED("MASTER READY", "WiFi Connected"); } else updateOLED("MASTER READY", "WiFi Offline");

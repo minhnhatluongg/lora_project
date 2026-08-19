@@ -21,6 +21,14 @@ void sendLoraMessage(String msg) {
   while (digitalRead(LORA_AUX) == LOW) { delay(1); } 
 }
 
+// Tu choi THAT, khong phai ACK gia. ESP32 phan biet duoc de bao len dashboard
+// rang lenh chua he duoc thuc thi, thay vi ve mot cai bom dang chay khong co that.
+void sendLoraNack(String body) {
+  pendingAck = "<B:NACK_" + body + ">";
+  ackWaitStart = millis();
+  Serial.println(F("  -> [KHOA AN TOAN] Sai che do, tu choi lenh!"));
+}
+
 void sendLoraSync(int relayIndex, bool isOn) {
   String devTag = "";
   if (relayIndex >= 0 && relayIndex <= 4) devTag = "BOM" + String(relayIndex + 1);
@@ -58,13 +66,22 @@ void processLoraCommand(String cmd) {
   }
   else if (body == "SET_MODE=AUTO") { turnOn(9, "LORA"); currentMode = 1; }
   else if (body == "SET_MODE=MANUAL") { turnOff(9, "LORA"); currentMode = 0; }
-  else if (body.startsWith("ON")) {
-    int relayNum = body.substring(2).toInt();
-    if (relayNum >= 1 && relayNum <= TOTAL_RELAYS) turnOn(relayNum - 1, "LORA");
+  else if (body.startsWith("AUTOON") || body.startsWith("AUTOOFF")) {
+    // Lenh do may trang thai AUTO tren ESP32 tu sinh ra. Chi nhan khi Nano cung
+    // dang o AUTO; hai ben hieu khac nhau ve che do thi tu choi, khong chay bua.
+    if (currentMode != 1) { sendLoraNack(body); return; }
+    bool on = body.startsWith("AUTOON");
+    int relayNum = body.substring(on ? 6 : 7).toInt();
+    if (relayNum >= 1 && relayNum <= TOTAL_RELAYS) { on ? turnOn(relayNum - 1, "LORA") : turnOff(relayNum - 1, "LORA"); }
   }
-  else if (body.startsWith("OFF")) {
-    int relayNum = body.substring(3).toInt();
-    if (relayNum >= 1 && relayNum <= TOTAL_RELAYS) turnOff(relayNum - 1, "LORA");
+  else if (body.startsWith("ON") || body.startsWith("OFF")) {
+    // Lenh TAY (tu web hoac man Nextion). Khoa an toan: chi nhan khi dang o THU
+    // CONG. Truoc day Nano thuc thi bat ke che do va van tra ACK, nen mot lenh
+    // khong he chay van bao thanh cong len dashboard.
+    if (currentMode != 0) { sendLoraNack(body); return; }
+    bool on = body.startsWith("ON");
+    int relayNum = body.substring(on ? 2 : 3).toInt();
+    if (relayNum >= 1 && relayNum <= TOTAL_RELAYS) { on ? turnOn(relayNum - 1, "LORA") : turnOff(relayNum - 1, "LORA"); }
   }
 
   pendingAck = "<B:ACK_" + body + ">";
