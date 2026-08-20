@@ -348,16 +348,60 @@ ESP32 **không cần cùng WiFi với server nữa**. Nạp xong mở Serial Mon
 
 ## 11. Sau này cập nhật code
 
+**Backend không có bước build.** Chỉ chép đè `src\` rồi khởi động lại dịch vụ.
+Nhưng có ba thứ **tuyệt đối không được đè**:
+
+| Không đụng | Vì sao |
+|---|---|
+| `.env` | Chứa khóa thật, khác hẳn `.env.example`. Đè là backend chạy bằng khóa mặc định — mà khóa đó nằm công khai trên GitHub |
+| `data\` | Database: lịch sử đo, ngưỡng đã chỉnh, tài khoản. Thứ duy nhất không tạo lại được |
+| `node_modules\` | `better-sqlite3` biên dịch sẵn cho đúng máy này |
+
+### Cách gọn: chạy script
+
+Chép [`deploy/update-server.ps1`](deploy/update-server.ps1) lên server một lần.
+Về sau mỗi lần cập nhật chỉ cần:
+
 ```powershell
-cd C:\inetpub\lora
-git pull
-cd backend
-npm install --omit=dev          # chỉ khi package.json đổi
-& C:\nssm\nssm.exe restart LoraFarmBackend
+.\update-server.ps1 -Source "C:\Users\Administrator\Desktop\lora_moi"
 ```
 
-Database `backend\data\farm.db` **không bị đụng** — cấu hình ngưỡng và lịch sử
-đo giữ nguyên qua các lần cập nhật.
+Script làm đủ 5 việc: dừng dịch vụ → sao lưu database → chép `src\` →
+`npm install` **chỉ khi `package.json` đổi** → bật lại rồi tự gọi `/api/health`
+kiểm tra. Không lên được thì báo đỏ và chỉ chỗ xem log.
+
+Bản sao lưu giữ 10 cái gần nhất trong `backup\`, tự dọn bản cũ.
+
+### Cách tay, nếu muốn tự làm từng bước
+
+```powershell
+$nssm = "D:\nssm-2.24\win64\nssm.exe"
+
+& $nssm stop LoraFarmBackend
+Copy-Item "D:\lora_project\data\farm.db" "D:\lora_project\backup\farm-$(Get-Date -f yyyyMMdd-HHmmss).db"
+
+# Chép đè src\ bằng WinSCP / FileZilla — KHÔNG chép .env và data\
+npm install --omit=dev          # chỉ khi package.json đổi
+
+& $nssm start LoraFarmBackend
+Invoke-RestMethod http://localhost:4000/api/health
+```
+
+### Vì sao phải dừng dịch vụ trước khi chép
+
+SQLite giữ file database mở, và tiến trình đang chạy có thể khóa file `.js`
+khiến chép đè hỏng giữa chừng. Dừng 2 giây rồi chép thì sạch.
+
+**Migration schema chạy tự động lúc khởi động** (`db.js`), nên bật lại là đã áp
+dụng xong — không có lệnh migrate riêng để quên.
+
+### Frontend thì ngược lại — cái này CÓ build
+
+```powershell
+cd frontend
+npm run build          # sinh ra thư mục dist\
+# chép nội dung dist\ vào thư mục site của IIS
+```
 
 ---
 
