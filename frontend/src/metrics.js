@@ -225,6 +225,12 @@ export const fmtDateTime = (iso) =>
 export const fmtShortTime = (iso) =>
   parse(iso)?.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) ?? '';
 
+// Hai nửa của fmtDateTime, tách riêng để bảng lịch sử xếp giờ trên ngày dưới khi
+// màn hình hẹp. Gộp một dòng thì cột thời gian chiếm 150px — gần một nửa bề
+// ngang điện thoại, mà cột đó lại là cột được ghim nên phải càng hẹp càng tốt.
+export const fmtClock = (iso) => parse(iso)?.toLocaleTimeString('vi-VN', { hour12: false }) ?? '';
+export const fmtDay = (iso) => parse(iso)?.toLocaleDateString('vi-VN') ?? '';
+
 // Same two-point calibration the backend applies; used by Settings to preview a
 // calibration before it is saved.
 export function tankLevelPct(distanceCm, tank) {

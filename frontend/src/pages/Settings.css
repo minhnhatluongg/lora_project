@@ -642,4 +642,12 @@
   .set-confirm { grid-template-columns: 1fr; }
   .set-confirm-icon { grid-row: auto; }
   .set-confirm-actions { grid-column: 1; }
+
+  /* Hai bảng của trang này gập thành thẻ ở bề ngang điện thoại — luật chung
+     nằm ở `.table-cards` trong styles.css. Dưới đây chỉ là phần riêng: bỏ bề
+     rộng tối thiểu 720px vốn ép bảng phải kéo ngang, và cho hai ô chữ dài trải
+     hết bề ngang thẻ thay vì chen vào nửa bên phải. */
+  .set-table table { min-width: 0; }
+  .set-table td.set-preview,
+  .set-table td.set-rule-desc { grid-template-columns: 1fr; gap: 3px; }
 }

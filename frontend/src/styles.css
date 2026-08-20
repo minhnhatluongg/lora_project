@@ -346,6 +346,7 @@ th { color: var(--muted); font-weight: 600; white-space: nowrap; }
 th em { font-style: normal; font-weight: 400; color: var(--faint); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .nowrap { white-space: nowrap; }
+.rt-when { white-space: nowrap; }
 .empty { color: var(--muted); text-align: center; padding: 16px; }
 
 /* ---- Alerts ---- */
@@ -635,6 +636,100 @@ th em { font-style: normal; font-weight: 400; color: var(--faint); }
 
   /* Panel bớt lề trong: 18px mỗi bên ăn mất một phần mười bề ngang máy. */
   .panel { padding: 14px 12px; margin-bottom: 14px; }
+
+  /* ---- Bảng lịch sử ở DASHBOARD ------------------------------------------
+     Tám cột số liệu thì không cách nào nhét vừa 332px, và bỏ bớt cột là bỏ mất
+     dữ liệu người ta có thể đang cần. Nên vẫn kéo ngang, nhưng kéo cho ra hồn:
+     cột Thời gian ghim tại chỗ, kéo tới cột K vẫn còn thấy dòng đó là lúc nào.
+     Nền đục là bắt buộc — thiếu nó thì các cột trôi lộ ra bên dưới cột ghim. */
+  .rt-table th:first-child,
+  .rt-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--panel);
+    box-shadow: 1px 0 0 var(--border);
+  }
+  /* Giờ trên, ngày dưới: gộp một dòng thì cột ghim rộng 150px, gần nửa màn
+     hình, chẳng còn mấy chỗ cho chính các con số. */
+  .rt-when { white-space: normal; }
+  .rt-clock, .rt-day { display: block; line-height: 1.25; }
+  .rt-day { font-size: 11px; color: var(--muted); }
+
+  /* ---- Bảng gập thành thẻ: `.table-cards` --------------------------------
+     Dành cho bảng có Ô NHẬP LIỆU, khác hẳn bảng tra cứu ở trên. Kéo ngang một
+     biểu mẫu là hỏng: lúc gõ vào ô "Khi cạn" thì tiêu đề cột đã trôi khỏi màn
+     hình, không còn biết mình đang điền cái gì. Ở đây mỗi hàng gập lại thành
+     một thẻ, nhãn cột đi kèm ngay bên trái từng ô — hết phải kéo ngang.
+
+     Nhãn lấy từ data-label đặt trong JSX. Đổi `display` của các phần tử bảng
+     khiến trình đọc màn hình không còn coi đây là bảng nữa, nhưng không mất
+     thông tin: mọi ô nhập trong các bảng này đều đã mang aria-label đầy đủ
+     kiểu "Bồn Đạm khi cạn" — vốn có sẵn từ trước chứ không phải thêm cho dịp
+     này. */
+  .table-cards { overflow-x: visible; background: none; }
+  .table-cards table { display: block; }
+  .table-cards thead { display: none; }
+  .table-cards tbody { display: block; }
+
+  .table-cards tr {
+    display: block;
+    margin-bottom: 10px;
+    padding: 2px 12px 8px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel-2);
+  }
+
+  .table-cards td {
+    display: grid;
+    grid-template-columns: minmax(88px, 0.85fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--border);
+    text-align: left;
+  }
+  .table-cards td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+  .table-cards td:last-child { border-bottom: none; }
+
+  /* Ô đầu hàng là tên thiết bị / tài khoản — cho làm tiêu đề thẻ, khỏi nhãn. */
+  .table-cards td:first-child {
+    display: block;
+    padding: 8px 0 7px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--blue);
+    border-bottom: 1px solid var(--border);
+  }
+  .table-cards td:first-child::before { content: none; }
+
+  /* Canh phải là để so cột số theo hàng dọc; hết cột thì hết tác dụng. */
+  .table-cards td.num { text-align: left; }
+  .table-cards td input:not([type='checkbox']),
+  .table-cards td select { width: 100%; min-width: 0; }
+
+  /* Ô nhiều nút: giữ chúng thành một hàng nút, đừng để lưới tách mỗi nút một ô. */
+  .table-cards td.row-actions {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding-top: 10px;
+  }
+  .table-cards td.row-actions::before { flex: 1 0 100%; }
+  .table-cards td.row-actions button { flex: 1 1 auto; padding: 8px 10px; }
+
+  /* Chật thì cắt lề và cỡ chữ trước, để thấy được nhiều cột nhất có thể. */
+  .rt-table th, .rt-table td { padding: 7px 8px; font-size: 12.5px; }
+  /* Đơn vị xuống dòng riêng chứ KHÔNG ẩn đi: "31.4" mà không biết °C hay °F thì
+     cột đó thành vô nghĩa. Xuống dòng vừa hẹp cột vừa giữ nguyên thông tin. */
+  .rt-table th em { display: block; font-size: 10px; }
   /* Vẫn giữ ba cột. Luật cũ ở đây xếp chồng chúng lại, từ hồi khối nhận diện
      còn là hai dòng chữ "FPT Education / FPT POLYTECHNIC" nên quá rộng. Nay nó
      là ảnh rộng 88px, cộng cụm giờ 134px và nút nhà 40px mới hết 282px — vẫn

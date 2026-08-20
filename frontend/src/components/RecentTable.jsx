@@ -6,7 +6,8 @@ import {
   TANK_IDS,
   LEVEL_KEYS,
   fmtValue,
-  fmtDateTime,
+  fmtClock,
+  fmtDay,
 } from '../metrics.js';
 
 const VIEWS = [
@@ -38,7 +39,10 @@ export function RecentTable({ rows }) {
         </div>
       </div>
 
-      <div className="table-wrap">
+      {/* rt-table: cột đầu được ghim lại khi kéo ngang trên điện thoại — tám
+          cột số liệu không tài nào nhét vừa màn hình, mà kéo tới cột K rồi thì
+          không còn biết con số đó thuộc lúc nào nữa. */}
+      <div className="table-wrap rt-table">
         <table>
           <thead>
             <tr>
@@ -54,7 +58,12 @@ export function RecentTable({ rows }) {
           <tbody>
             {list.map((r) => (
               <tr key={r.id}>
-                <td className="nowrap">{fmtDateTime(r.created_at)}</td>
+                {/* Hai <span> chứ không phải một chuỗi: rộng rãi thì CSS cho
+                    chúng nằm cùng dòng như cũ, hẹp thì xếp giờ trên ngày dưới. */}
+                <td className="rt-when">
+                  <span className="rt-clock">{fmtClock(r.created_at)}</span>{' '}
+                  <span className="rt-day">{fmtDay(r.created_at)}</span>
+                </td>
                 {keys.map((k) => (
                   <td key={k} className="num">
                     {fmtValue(r[k], k)}

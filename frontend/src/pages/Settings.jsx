@@ -768,7 +768,7 @@ export function Settings() {
               lúc bồn cạn và lúc bồn đầy — rồi điền vào đây. Mức nước % ={' '}
               <code>(cạn − đo được) / (cạn − đầy) × 100</code>.
             </p>
-            <div className="table-wrap set-table">
+            <div className="table-wrap set-table table-cards">
               <table>
                 <thead>
                   <tr>
@@ -791,8 +791,11 @@ export function Settings() {
                     });
                     return (
                       <tr key={id}>
+                        {/* data-label: ở bề ngang điện thoại mỗi hàng gập thành
+                            một thẻ và hàng tiêu đề bị ẩn, nên nhãn cột phải đi
+                            kèm từng ô. CSS lấy chuỗi này ra qua attr(). */}
                         <td>{METRICS[id].short}</td>
-                        <td>
+                        <td data-label="Tên hiển thị">
                           <input
                             className="set-name-input"
                             value={tank.name || ''}
@@ -800,7 +803,7 @@ export function Settings() {
                             onChange={(e) => setTank(id, { name: e.target.value })}
                           />
                         </td>
-                        <td>
+                        <td data-label="Bật">
                           <input
                             type="checkbox"
                             className="set-check"
@@ -809,7 +812,7 @@ export function Settings() {
                             onChange={(e) => setTank(id, { enabled: e.target.checked })}
                           />
                         </td>
-                        <td className="num">
+                        <td className="num" data-label="Khi cạn (cm)">
                           <input
                             type="text"
                             inputMode="decimal"
@@ -820,7 +823,7 @@ export function Settings() {
                             onChange={(e) => setTank(id, { emptyCm: e.target.value })}
                           />
                         </td>
-                        <td className="num">
+                        <td className="num" data-label="Khi đầy (cm)">
                           <input
                             type="text"
                             inputMode="decimal"
@@ -831,7 +834,7 @@ export function Settings() {
                             onChange={(e) => setTank(id, { fullCm: e.target.value })}
                           />
                         </td>
-                        <td className="set-preview">
+                        <td className="set-preview" data-label="Đọc hiện tại">
                           {calErr ? (
                             <span className="set-preview-bad">
                               <IconWarning size={14} />
@@ -899,7 +902,7 @@ export function Settings() {
               Khi ở chế độ AUTO, mỗi lần có dữ liệu mới hệ thống sẽ BẬT thiết bị nếu điều kiện đúng,
               ngược lại TẮT — rồi đẩy lệnh xuống node điều khiển.
             </p>
-            <div className="table-wrap set-table">
+            <div className="table-wrap set-table table-cards">
               <table>
                 <thead>
                   <tr>
@@ -927,7 +930,7 @@ export function Settings() {
                     return (
                       <tr key={dev}>
                         <td>{deviceName(dev)}</td>
-                        <td>
+                        <td data-label="Bật luật">
                           <input
                             type="checkbox"
                             className="set-check"
@@ -936,7 +939,7 @@ export function Settings() {
                             onChange={(e) => setRule(dev, { enabled: e.target.checked })}
                           />
                         </td>
-                        <td>
+                        <td data-label="Cảm biến">
                           <select
                             className="set-select"
                             value={rule.metric}
@@ -955,7 +958,7 @@ export function Settings() {
                             ))}
                           </select>
                         </td>
-                        <td>
+                        <td data-label="Điều kiện">
                           <select
                             value={rule.op}
                             aria-label={`Điều kiện cho ${deviceName(dev)}`}
@@ -965,7 +968,7 @@ export function Settings() {
                             <option value="above">lớn hơn (&gt;)</option>
                           </select>
                         </td>
-                        <td className="num">
+                        <td className="num" data-label="Ngưỡng">
                           {/* Typed in the metric's DISPLAY unit — mS/cm for EC —
                               and held as text so clearing the box does not
                               rewrite the rule to "< 0". */}
@@ -979,18 +982,22 @@ export function Settings() {
                             onChange={(e) => setRule(dev, { value: e.target.value })}
                           />
                         </td>
-                        <td className="set-rule-desc">
+                        {/* Bọc trong <span> chứ không để fragment trần: ở bố cục
+                            thẻ trên điện thoại ô này là một lưới hai cột, mà
+                            fragment nhiều con sẽ bị tách thành nhiều ô lưới rời
+                            nhau thay vì một câu liền mạch. */}
+                        <td className="set-rule-desc" data-label="Diễn giải">
                           {ruleErr ? (
                             <span className="set-preview-bad">
                               <IconWarning size={14} />
                               {ruleErr}
                             </span>
                           ) : (
-                            <>
+                            <span>
                               BẬT khi <strong>{m?.label || rule.metric}</strong>{' '}
                               {rule.op === 'below' ? '<' : '>'} {fmtValue(stored, rule.metric)}
                               {m?.unit ? ` ${m.unit}` : ''}
-                            </>
+                            </span>
                           )}
                         </td>
                       </tr>

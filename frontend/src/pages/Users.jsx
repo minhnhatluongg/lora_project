@@ -101,7 +101,10 @@ export function Users() {
 
       <div className="panel">
         <h3>Danh sách tài khoản</h3>
-        <div className="table-wrap">
+        {/* table-cards: o be ngang dien thoai moi hang gap thanh mot the
+            (styles.css). data-label la nhan cot di kem tung o, vi hang tieu de
+            bi an di. */}
+        <div className="table-wrap table-cards">
           <table>
             <thead>
               <tr>
@@ -116,20 +119,20 @@ export function Users() {
               {users.map((u) => (
                 <tr key={u.id}>
                   <td>{u.username}</td>
-                  <td>{u.fullName || '—'}</td>
-                  <td>
+                  <td data-label="Họ tên">{u.fullName || '—'}</td>
+                  <td data-label="Vai trò">
                     <select value={u.role} onChange={(e) => changeRole(u, e.target.value)}>
                       {ROLES.map((r) => (
                         <option key={r} value={r}>{ROLE_LABEL[r]}</option>
                       ))}
                     </select>
                   </td>
-                  <td>
+                  <td data-label="Trạng thái">
                     <span className={`badge ${u.active ? 'badge-on' : 'badge-off'}`}>
                       {u.active ? 'Hoạt động' : 'Đã khóa'}
                     </span>
                   </td>
-                  <td className="row-actions">
+                  <td className="row-actions" data-label="Hành động">
                     <button onClick={() => toggleActive(u)}>{u.active ? 'Khóa' : 'Mở'}</button>
                     <button onClick={() => resetPassword(u)}>Đổi MK</button>
                     <button className="danger" onClick={() => remove(u)}>Xóa</button>
