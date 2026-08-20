@@ -367,31 +367,55 @@ th em { font-style: normal; font-weight: 400; color: var(--faint); }
   pointer-events: none;
 }
 
-/* Do sang cua video doi theo tung khung hinh, nen chu trang tren no khong the
-   dua vao mot muc tuong phan co dinh. Lop phu nay giu nen luon du toi. */
+/* Chi lam toi RIA man hinh, giu long khung sang nguyen.
+   Truoc day day la mot lop den phu kin, va no dim ca doan phim — thu dang le
+   phai noi bat. Viec giu do tuong phan cho chu nay do chinh tam the dam nhan,
+   nen o day chi con mot vet toi nhe de canh anh khong bi chay ra ngoai. */
 .login-scrim {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background:
-    linear-gradient(180deg, rgba(4, 16, 10, 0.55), rgba(4, 16, 10, 0.75)),
-    radial-gradient(circle at 50% 45%, transparent 20%, rgba(4, 16, 10, 0.5) 75%);
+  background: radial-gradient(
+    ellipse 80% 70% at 50% 45%,
+    transparent 40%,
+    rgba(3, 14, 8, 0.45) 100%
+  );
 }
 
-/* Kinh mo: the noi tren video, van doc duoc chu vi da co lop phu ben duoi. */
+/* Kinh mo that su: nhin xuyen thay video chay ben duoi.
+   Do dam 0.55 khong phai chon cho dep — do la muc thap nhat con giu duoc chu
+   trang doc ro khi phia sau la may trang xoa. Nhat hon nua thi luc may troi qua
+   la mat chu. Blur giup them, vi no boi phang cac mang sang toi nho. */
 .login-card {
   position: relative;
   z-index: 1;
-  width: min(360px, calc(100vw - 32px));
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 18px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
-  padding: 30px 28px;
+  width: min(370px, calc(100vw - 32px));
+  background: rgba(6, 22, 14, 0.55);
+  backdrop-filter: blur(22px) saturate(1.3);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 20px;
+  box-shadow:
+    0 26px 70px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  padding: 32px 30px;
   display: flex;
   flex-direction: column;
+  color: #fff;
+}
+
+/* Logo la anh JPG nen trang, dat thang len kinh mo se thanh mot o trang cham.
+   Cho no mot vien bo tron trang han hoi thi trong nhu co y. */
+.login-logo {
+  display: block;
+  height: 40px;
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto 18px;
+  padding: 7px 14px;
+  background: #fff;
+  border-radius: 10px;
+  object-fit: contain;
 }
 
 /* Ai bat "giam chuyen dong" trong he dieu hanh thi khong nen bi mot doan phim
@@ -399,33 +423,51 @@ th em { font-style: normal; font-weight: 400; color: var(--faint); }
 @media (prefers-reduced-motion: reduce) {
   .login-video { display: none; }
 }
-/* Khoá chiều cao, để chiều rộng tự co theo tỉ lệ 1260x428. Khoá chiều rộng thì
-   thẻ đăng nhập sẽ giật một nhịp lúc ảnh vừa tải xong. */
-.login-logo {
-  display: block;
-  height: 44px;
-  width: auto;
-  max-width: 100%;
-  margin: 0 auto 16px;
-  object-fit: contain;
-}
+
 .login-brand {
   font-family: 'Instrument Serif', Georgia, 'Times New Roman', serif;
   font-size: 34px; font-weight: 400; letter-spacing: 0.5px;
-  color: #14532d; text-align: center; line-height: 1.1;
+  color: #fff; text-align: center; line-height: 1.1;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
 }
-.login-sub { color: var(--muted); font-size: 13px; text-align: center; margin: 6px 0 20px; }
-.login-card label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.login-sub { color: rgba(255,255,255,0.72); font-size: 13px; text-align: center; margin: 7px 0 22px; }
+.login-card label { font-size: 13px; color: rgba(255,255,255,0.75); margin-bottom: 5px; }
+/* O nhap cung trong mo, nhung phai DAY hon nen the mot chut — neu bang nhau
+   thi khong con nhin ra dau la cho go chu. */
 .login-card input {
-  background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
-  border-radius: 8px; padding: 10px; margin-bottom: 14px; font-size: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  border-radius: 10px; padding: 12px; margin-bottom: 15px; font-size: 14px;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
+.login-card input::placeholder { color: rgba(255, 255, 255, 0.45); }
+.login-card input:hover { border-color: rgba(255, 255, 255, 0.4); }
+.login-card input:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.14);
+}
+
+/* Nut la thu DAC duy nhat tren the. Tren kinh mo, mot nut cung trong mo nua thi
+   khong con dau hieu nao noi "bam vao day" — nen no dac, trang, chu xanh dam. */
 .login-card button {
-  background: var(--blue); color: #fff; border: none; border-radius: 8px;
-  padding: 11px; font-weight: 700; cursor: pointer; font-size: 14px;
+  background: #fff; color: #0f3d20; border: none; border-radius: 10px;
+  padding: 13px; font-weight: 700; cursor: pointer; font-size: 14px;
+  transition: background 0.15s ease, transform 0.1s ease;
 }
-.login-card button:disabled { opacity: 0.6; }
-.login-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; padding: 8px 10px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
+.login-card button:hover:not(:disabled) { background: #eafaf0; }
+.login-card button:active:not(:disabled) { transform: translateY(1px); }
+.login-card button:disabled { opacity: 0.55; cursor: progress; }
+/* Bao loi tren kinh mo: nen do nhat cua ban sang bi video an mat, nen dung nen
+   do dam va chu sang. */
+.login-error {
+  background: rgba(153, 27, 27, 0.55);
+  color: #fff;
+  border: 1px solid rgba(255, 160, 160, 0.5);
+  padding: 9px 11px; border-radius: 9px; font-size: 13px; margin-bottom: 13px;
+}
 .login-hint { text-align: center; color: var(--faint); font-size: 12px; margin: 14px 0 0; }
 
 /* The topbar, the user chip and the page-head band all belonged to the sidebar
