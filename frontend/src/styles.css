@@ -340,14 +340,64 @@ th em { font-style: normal; font-weight: 400; color: var(--faint); }
 
 /* ---- Login ---- */
 .full-center { min-height: 100vh; display: grid; place-items: center; color: var(--muted); }
+/* --- Man dang nhap: nen video ruong dong ------------------------------------
+   Nen chuyen sac o day KHONG phai trang tri thua: video nam de len tren no, nen
+   khi video chua tai xong, bi chan, hay trinh duyet tu choi tu phat thi man hinh
+   van ra dang co y chu khong phai mot mang den hong. */
 .login-screen {
-  min-height: 100vh; display: grid; place-items: center;
-  background: radial-gradient(circle at 30% 20%, #dbeafe, var(--bg));
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 25% 15%, #1e4620, transparent 55%),
+    radial-gradient(circle at 80% 85%, #14532d, transparent 50%),
+    linear-gradient(160deg, #0f2417, #08150f);
 }
+
+.login-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Video nen khong bao gio la noi dung — bat su kien chuot vao no chi lam
+     nguoi dung bam nham. */
+  pointer-events: none;
+}
+
+/* Do sang cua video doi theo tung khung hinh, nen chu trang tren no khong the
+   dua vao mot muc tuong phan co dinh. Lop phu nay giu nen luon du toi. */
+.login-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(4, 16, 10, 0.55), rgba(4, 16, 10, 0.75)),
+    radial-gradient(circle at 50% 45%, transparent 20%, rgba(4, 16, 10, 0.5) 75%);
+}
+
+/* Kinh mo: the noi tren video, van doc duoc chu vi da co lop phu ben duoi. */
 .login-card {
-  width: 340px; background: var(--panel); border: 1px solid var(--border);
-  border-radius: 16px; box-shadow: var(--shadow);
-  padding: 28px; display: flex; flex-direction: column;
+  position: relative;
+  z-index: 1;
+  width: min(360px, calc(100vw - 32px));
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  padding: 30px 28px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ai bat "giam chuyen dong" trong he dieu hanh thi khong nen bi mot doan phim
+   chay vong lap ngay man hinh dau tien. Bo video, giu nguyen nen chuyen sac. */
+@media (prefers-reduced-motion: reduce) {
+  .login-video { display: none; }
 }
 /* Khoá chiều cao, để chiều rộng tự co theo tỉ lệ 1260x428. Khoá chiều rộng thì
    thẻ đăng nhập sẽ giật một nhịp lúc ảnh vừa tải xong. */
@@ -359,7 +409,11 @@ th em { font-style: normal; font-weight: 400; color: var(--faint); }
   margin: 0 auto 16px;
   object-fit: contain;
 }
-.login-brand { font-size: 22px; font-weight: 700; color: var(--blue); text-align: center; letter-spacing: 1px; }
+.login-brand {
+  font-family: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  font-size: 34px; font-weight: 400; letter-spacing: 0.5px;
+  color: #14532d; text-align: center; line-height: 1.1;
+}
 .login-sub { color: var(--muted); font-size: 13px; text-align: center; margin: 6px 0 20px; }
 .login-card label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
 .login-card input {

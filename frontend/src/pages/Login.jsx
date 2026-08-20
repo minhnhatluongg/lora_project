@@ -2,6 +2,16 @@ import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import logoUrl from '../assets/logo.jpg';
 
+// Nền là một đoạn phim máy cày ngoài đồng, phát vòng lặp không tiếng.
+//
+// Đặt ở CloudFront và nặng khoảng 10 MB, nên nó KHÔNG được phép là điều kiện
+// để đăng nhập: bảng điều khiển có thể nằm trong nhà kính chỉ có mạng nội bộ.
+// Phía sau video luôn có một nền chuyển sắc màu đồng ruộng, nên video tải chậm,
+// bị chặn, hay trình duyệt từ chối tự phát thì màn hình vẫn ra dáng cố ý chứ
+// không phải một mảng đen hỏng.
+const BG_VIDEO =
+  'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260622_204103_f607742e-09da-4cf5-bb06-4e67b0a531de.mp4';
+
 export function Login() {
   const { login } = useAuth();
   const [username, setUsername] = useState('');
@@ -24,12 +34,24 @@ export function Login() {
 
   return (
     <div className="login-screen">
+      {/* aria-hidden + tabIndex -1: đây là trang trí, trình đọc màn hình và
+          phím Tab không có việc gì với nó. */}
+      <video
+        className="login-video"
+        src={BG_VIDEO}
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      {/* Lớp phủ tối: chữ trắng trên video sáng tối thất thường thì không đọc
+          nổi, và độ sáng thay đổi theo từng khung hình. */}
+      <div className="login-scrim" aria-hidden="true" />
+
       <form className="login-card" onSubmit={submit}>
-        {/* No emoji anywhere in this design; the login card wears the same
-            brand block PageShell puts on every screen behind it. */}
-        {/* Logo chính thức thay cho hai dòng chữ dựng bằng CSS — cùng một ảnh
-            với thanh tiêu đề trong PageShell, để không có hai phiên bản nhận
-            diện lệch nhau. */}
         <img
           className="login-logo"
           src={logoUrl}
@@ -40,28 +62,35 @@ export function Login() {
         <div className="login-brand">SMART FARM</div>
         <p className="login-sub">Hệ thống nông nghiệp thông minh dùng LoRa</p>
 
-        <label>Tài khoản</label>
+        <label htmlFor="login-user">Tài khoản</label>
         <input
+          id="login-user"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          placeholder="admin"
+          placeholder="Tài khoản"
+          autoComplete="username"
           autoFocus
         />
 
-        <label>Mật khẩu</label>
+        <label htmlFor="login-pass">Mật khẩu</label>
         <input
+          id="login-pass"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="••••••"
+          autoComplete="current-password"
         />
 
-        {error && <div className="login-error">{error}</div>}
+        {error && (
+          <div className="login-error" role="alert">
+            {error}
+          </div>
+        )}
 
         <button type="submit" disabled={busy}>
           {busy ? 'Đang đăng nhập…' : 'Đăng nhập'}
         </button>
-
       </form>
     </div>
   );
