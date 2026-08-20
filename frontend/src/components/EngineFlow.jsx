@@ -11,19 +11,24 @@
 // cho biết đang làm GÌ. Ban đầu mỗi bước có nhãn riêng bên dưới, nhưng trên
 // panel 1024x600 phần nhãn đó đẩy khối VAN xuống quá đáy màn hình.
 
+// Gom các bước theo VIỆC người vận hành nhìn thấy, không theo từng trạng thái
+// máy. Firmware tách "ra lệnh bật bơm" và "đang bơm" thành hai trạng thái vì nó
+// phải chờ Nano xác nhận, nhưng với người đứng xem thì đó vẫn là một việc.
 const MIX_STEPS = [
-  { key: 'MIX_ADD_WATER', label: 'Bơm nước vào bồn trộn', match: ['MIX_ADD_WATER'] },
-  { key: 'MIX_WAIT_STABLE', label: 'Đo EC', match: ['MIX_WAIT_STABLE'] },
-  { key: 'MIX_DOSING_NUTRIENT', label: 'Châm Đạm + Kali', match: ['MIX_DOSING_NUTRIENT'] },
-  { key: 'MIX_STIRRING', label: 'Khuấy đều', match: ['MIX_STIRRING'] },
+  { key: 'water', label: 'Bơm nước vào bồn trộn',
+    match: ['MIX_START_PUMP3', 'MIX_PUMPING_WATER', 'MIX_STOP_PUMP3'] },
+  { key: 'measure', label: 'Đo EC',
+    match: ['MIX_WAIT_STABLE'] },
+  { key: 'dose', label: 'Châm Đạm + Kali',
+    match: ['MIX_START_DOSING', 'MIX_DOSING_NUTRIENT', 'MIX_STOP_DOSING'] },
 ];
 
 const AUTO_STEPS = [
-  { key: 'AUTO_IDLE', label: 'Chờ đất khô', match: ['AUTO_IDLE'] },
-  { key: 'AUTO_OPEN_VALVE', label: 'Mở van', match: ['AUTO_OPEN_VALVE', 'AUTO_WAIT_VALVE'] },
-  { key: 'AUTO_IRRIGATING', label: 'Đang tưới', match: ['AUTO_START_PUMP', 'AUTO_IRRIGATING'] },
-  { key: 'AUTO_CLOSE_VALVE', label: 'Đóng van', match: ['AUTO_STOP_PUMP', 'AUTO_WAIT_PUMP_OFF', 'AUTO_CLOSE_VALVE'] },
-  { key: 'AUTO_RESTING', label: 'Nghỉ thấm nước', match: ['AUTO_RESTING'] },
+  { key: 'idle', label: 'Chờ đất khô', match: ['AUTO_IDLE'] },
+  { key: 'open', label: 'Mở van', match: ['AUTO_OPEN_VALVE', 'AUTO_WAIT_VALVE_ON'] },
+  { key: 'water', label: 'Đang tưới', match: ['AUTO_WAIT_PUMP_ON', 'AUTO_IRRIGATING'] },
+  { key: 'close', label: 'Đóng van', match: ['AUTO_WAIT_PUMP_OFF', 'AUTO_WAIT_VALVE_OFF'] },
+  { key: 'rest', label: 'Nghỉ thấm nước', match: ['AUTO_WAIT_RESTING_CMD', 'AUTO_RESTING'] },
 ];
 
 function Track({ title, steps, current, done, doneLabel }) {

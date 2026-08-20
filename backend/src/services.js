@@ -75,6 +75,28 @@ export function getStatus() {
   };
 }
 
+// Tên các bước của hai máy trạng thái trên ESP32, theo ĐÚNG thứ tự khai báo
+// enum trong esp32_master.ino. Firmware gửi lên số thứ tự chứ không gửi tên —
+// rẻ hơn nhiều byte trên mỗi gói, nhưng nghĩa của con số thì chỉ enum mới biết,
+// nên bảng này phải đi cùng firmware. Đổi thứ tự enum bên kia là phải sửa ở đây.
+const AUTO_STATE_NAMES = [
+  'AUTO_IDLE', 'AUTO_OPEN_VALVE', 'AUTO_WAIT_VALVE_ON', 'AUTO_WAIT_PUMP_ON',
+  'AUTO_IRRIGATING', 'AUTO_WAIT_PUMP_OFF', 'AUTO_WAIT_VALVE_OFF',
+  'AUTO_WAIT_RESTING_CMD', 'AUTO_RESTING',
+];
+const MIX_STATE_NAMES = [
+  'MIX_IDLE', 'MIX_START_PUMP3', 'MIX_PUMPING_WATER', 'MIX_STOP_PUMP3',
+  'MIX_WAIT_STABLE', 'MIX_START_DOSING', 'MIX_DOSING_NUTRIENT', 'MIX_STOP_DOSING',
+];
+
+// Chấp nhận cả hai dạng: số thứ tự (firmware hiện tại) và tên (dễ đọc khi gọi
+// bằng curl để thử). Số nằm ngoài bảng thì bỏ qua, không đoán bừa.
+function stateName(value, names) {
+  if (typeof value === 'string' && value) return value;
+  const i = Number(value);
+  return Number.isInteger(i) && i >= 0 && i < names.length ? names[i] : undefined;
+}
+
 // The master telling us what it is actually doing: which mode the panel is in
 // (it can be changed at the Nextion or by the cabinet switch, where the web
 // never sees it) and which step each state machine has reached.
@@ -89,13 +111,15 @@ export function reportFromMaster({ mode, autoState, mixState, mixReady } = {}) {
     sets.push(`mode = ?`);
     params.push(mode);
   }
-  if (typeof autoState === 'string' && autoState) {
+  const autoName = stateName(autoState, AUTO_STATE_NAMES);
+  if (autoName) {
     sets.push(`auto_state = ?`);
-    params.push(autoState);
+    params.push(autoName);
   }
-  if (typeof mixState === 'string' && mixState) {
+  const mixName = stateName(mixState, MIX_STATE_NAMES);
+  if (mixName) {
     sets.push(`mix_state = ?`);
-    params.push(mixState);
+    params.push(mixName);
   }
   if (mixReady !== undefined) {
     sets.push(`mix_ready = ?`);
