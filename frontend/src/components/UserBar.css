@@ -7,14 +7,25 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
-  height: 26px;
+  /* Thà xuống hàng còn hơn ép các mục hẹp lại tới mức chữ gãy đôi. */
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  /* min-height chứ KHÔNG phải height. Các chip là flex item nên mặc định co
+     được; ở bề ngang điện thoại chúng bị ép hẹp tới mức "Người dùng" gãy làm
+     hai dòng và cao 40px. Với height cố định 26px, phần dôi ra tràn khỏi hộp và
+     đè lên logo FPT ngay bên dưới — đúng lỗi nhìn thấy trên máy. min-height cho
+     hàng cao theo nội dung thật. */
+  min-height: 26px;
   margin-top: -8px;
   font-size: 13px;
   color: var(--muted);
 }
 
 .userbar-name {
+  /* Đây là mục DUY NHẤT được phép co, và nó co bằng cách cắt bớt chữ chứ không
+     xuống dòng — nên hàng luôn giữ đúng một chiều cao. */
+  flex: 0 1 auto;
+  min-width: 0;
   font-weight: 700;
   color: var(--text);
   max-width: 240px;
@@ -24,6 +35,8 @@
 }
 
 .userbar-role {
+  flex: 0 0 auto;
+  white-space: nowrap;
   background: var(--blue);
   color: #fff;
   font-size: 11px;
@@ -37,6 +50,10 @@
 .userbar-logout {
   display: inline-flex;
   align-items: center;
+  /* Không co và không xuống dòng: chữ trong nút là nhãn hành động, gãy làm đôi
+     thì vừa khó đọc vừa làm cả hàng cao gấp rưỡi. */
+  flex: 0 0 auto;
+  white-space: nowrap;
   gap: 6px;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -74,6 +91,17 @@
 .app-shell .pageshell { min-height: calc(100vh - 64px); }
 
 @media (max-width: 620px) {
-  .userbar { justify-content: center; }
-  .userbar-name { max-width: 45vw; }
+  .userbar { justify-content: center; gap: 6px; }
+  .userbar-name { max-width: 45vw; font-size: 12px; }
+
+  /* Nhỏ lại một nấc để bốn mục còn nằm gọn một hàng ở bề ngang 390px. Hẹp hơn
+     nữa thì flex-wrap cho xuống hàng thứ hai — vẫn không đè lên gì. */
+  .userbar-role { font-size: 10.5px; padding: 2px 8px; }
+  .userbar-link,
+  .userbar-logout { font-size: 11px; padding: 3px 10px 3px 8px; gap: 5px; }
+
+  /* Con số 64px ở trên tính theo thanh cao đúng 26px. Trên điện thoại thanh có
+     thể xuống hai hàng, và trang cuộn là chuyện bình thường — giữ min-height
+     tính sẵn chỉ chừa ra một khoảng trắng thừa ở cuối trang. */
+  .app-shell .pageshell { min-height: 0; }
 }

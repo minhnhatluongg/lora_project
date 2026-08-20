@@ -323,6 +323,10 @@
   gap: 20px;
   align-items: start;
 }
+/* Ô lưới mặc định không chịu hẹp hơn nội dung của nó (min-width:auto). Bảng số
+   liệu và danh sách cảnh báo nằm trong đây, nên thiếu dòng này thì chúng nong
+   cột rộng ra và đẩy cả trang — đo được 730px trên màn 390px. */
+.dash-grid > * { min-width: 0; }
 .dash-grid-even { grid-template-columns: 1fr 1fr; }
 
 /* ---- Responsive ------------------------------------------------------------
@@ -424,10 +428,21 @@
   .dash-card { min-height: 0; }
 }
 
+/* Vẫn hai cột, không tụt xuống một. Bố cục bên trong thẻ (glyph trái, nhãn và
+   trị số phải) được vẽ cho cột rộng 172–220px theo bản thiết kế; kéo ra hết bề
+   ngang 358px của điện thoại thì giữa thẻ trống một khoảng lớn và mỗi thẻ cao
+   gần 200px — cả trang thành một cột dài lê thê. Hai cột ở 390px cho ra 170px
+   mỗi thẻ, đúng bề rộng gốc. */
 @media (max-width: 620px) {
+  .dash-row { gap: 12px; margin-bottom: 12px; }
+  .dash-card-tanks { grid-column: 1 / -1; }
+}
+
+/* Dưới 340px (iPhone SE đời đầu, màn ngoài máy gập) hai cột chỉ còn 144px và
+   ngay cả "NHIỆT ĐỘ" cũng gãy làm đôi — tới đây một cột mới dễ đọc hơn. */
+@media (max-width: 340px) {
   .dash-row-primary,
   .dash-row-secondary { grid-template-columns: 1fr; }
-  .dash-card-tanks { grid-column: auto; }
 }
 
 /* --- Nút "Lấy dữ liệu ngay" cạnh tiêu đề ---------------------------------- */

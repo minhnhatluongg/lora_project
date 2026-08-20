@@ -248,10 +248,20 @@ body {
   background: var(--panel); border: 1px solid var(--border);
   border-radius: var(--radius); box-shadow: var(--shadow);
   padding: 18px; margin-bottom: 20px;
+  /* Panel gần như luôn là ô con của một lưới. Ô lưới mặc định min-width:auto,
+     tức là "không được hẹp hơn nội dung" — một bảng số liệu bên trong sẽ kéo
+     panel rộng ra thay vì tự cuộn, và kéo theo cả trang. Đặt 0 để panel chịu
+     bó theo cột, phần dài để `.table-wrap` bên trong cuộn. */
+  min-width: 0;
 }
 .panel h3 { margin: 0 0 14px; font-size: 15px; }
-.panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.panel-head h3 { margin: 0; }
+/* wrap: đầu panel là tiêu đề + một cụm nút; ở bề ngang điện thoại hai thứ đó
+   không đứng chung hàng được, cho xuống dòng thay vì cùng nhau đẩy panel rộng. */
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px; margin-bottom: 14px;
+}
+.panel-head h3 { margin: 0; min-width: 0; }
 .panel-sub { font-size: 11px; color: var(--faint); }
 
 /* ---- Charts ---- */
@@ -315,7 +325,21 @@ body {
 .badge-mode { background: #e8f0fe; color: var(--blue); }
 
 /* ---- Table ---- */
-.table-wrap { overflow-x: auto; }
+/* Trên điện thoại các bảng này rộng gấp đôi màn hình nên phải cuộn ngang. Vuốt
+   được, nhưng KHÔNG có gì cho thấy là còn cột phía sau: thanh cuộn trên máy cảm
+   ứng chỉ hiện lúc đang vuốt, nên bảng trông như đã hết ở mép phải.
+   Bốn lớp nền dưới đây là mẹo "bóng cuộn": hai lớp `local` là mảng trắng trôi
+   theo nội dung, hai lớp `scroll` là vệt bóng đứng yên ở hai mép. Cuộn hết về
+   một phía thì mảng trắng che đúng vệt bóng bên đó — bóng chỉ còn ở phía vẫn
+   còn nội dung. Không cần JavaScript và không đo đạc gì. */
+.table-wrap {
+  overflow-x: auto;
+  background:
+    linear-gradient(90deg, var(--panel) 30%, rgba(255, 255, 255, 0)) left / 24px 100% no-repeat local,
+    linear-gradient(270deg, var(--panel) 30%, rgba(255, 255, 255, 0)) right / 24px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgba(16, 35, 63, 0.3), rgba(16, 35, 63, 0)) left / 16px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgba(16, 35, 63, 0.3), rgba(16, 35, 63, 0)) right / 16px 100% no-repeat scroll;
+}
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); }
 th { color: var(--muted); font-weight: 600; white-space: nowrap; }
@@ -335,8 +359,11 @@ th em { font-style: normal; font-weight: 400; color: var(--faint); }
 .alert-danger { background: #fef2f2; border-color: #fecaca; }
 .alert-info { background: #eff6ff; border-color: #bfdbfe; }
 .alert-icon { line-height: 0; flex-shrink: 0; }
-.alert-time { color: var(--muted); font-size: 12px; min-width: 64px; }
-.alert-msg { flex: 1; }
+.alert-time { color: var(--muted); font-size: 12px; min-width: 64px; flex-shrink: 0; }
+/* min-width:0 là chỗ quyết định. Thiếu nó, `flex: 1` vẫn không cho phép mục co
+   hẹp hơn dòng chữ dài nhất, nên một câu cảnh báo dài kéo cả thẻ <li> rộng ra
+   — đo được 552px trên màn 390px. Có nó thì câu tự xuống dòng. */
+.alert-msg { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 
 /* ---- Login ---- */
 .full-center { min-height: 100vh; display: grid; place-items: center; color: var(--muted); }
@@ -430,7 +457,7 @@ th em { font-style: normal; font-weight: 400; color: var(--faint); }
   font-size: 34px; font-weight: 400;
   /* Gian chu ra cho thoang. Instrument Serif von hep ngang, de sat nhau thi
      doc nhu mot khoi lien. */
-  letter-spacing: 4px;
+  letter-spacing: 10px;
   /* Bu lai phan khoang trang thua ben phai chu cuoi, neu khong dong chu se
      lech trai mot chut so voi tam the. */
   text-indent: 4px;
@@ -600,12 +627,35 @@ th em { font-style: normal; font-weight: 400; color: var(--faint); }
   .npk-row { grid-template-columns: 90px 1fr 80px; }
   .chart-controls { width: 100%; }
   .seg { flex-wrap: wrap; }
-  .pageshell-chrome { grid-template-columns: 1fr; justify-items: center; gap: 10px; }
-  .pageshell-brandwrap .pageshell-sep { display: none; }
-  .pageshell-brand { align-items: center; }
-  .pageshell-meta { justify-content: center; }
+
+  /* Câu cảnh báo giờ xuống được nhiều dòng, nên biểu tượng và giờ phải bám dòng
+     đầu; canh giữa theo chiều dọc sẽ đẩy chúng xuống giữa khối chữ. */
+  .alert { align-items: flex-start; }
+  .alert-icon { margin-top: 1px; }
+
+  /* Panel bớt lề trong: 18px mỗi bên ăn mất một phần mười bề ngang máy. */
+  .panel { padding: 14px 12px; margin-bottom: 14px; }
+  /* Vẫn giữ ba cột. Luật cũ ở đây xếp chồng chúng lại, từ hồi khối nhận diện
+     còn là hai dòng chữ "FPT Education / FPT POLYTECHNIC" nên quá rộng. Nay nó
+     là ảnh rộng 88px, cộng cụm giờ 134px và nút nhà 40px mới hết 282px — vẫn
+     lọt trong 358px của máy 390px. Xếp chồng làm thanh đầu trang cao 133px,
+     tức một phần tư màn hình điện thoại chưa thấy gì đã hết. */
+  .pageshell-chrome { gap: 8px; }
+  .pageshell-brandwrap { gap: 8px; }
+  /* Gạch dọc phân cách chỉ có nghĩa khi hai bên nó còn chỗ thở. */
+  .pageshell-sep { display: none; }
+  .pageshell-meta { gap: 9px; }
   .pageshell-title { font-size: 20px; letter-spacing: 1px; white-space: normal; }
-  .pageshell-titlebar { margin-bottom: 12px; }
+
+  /* Trên màn rộng, nút cạnh tiêu đề neo tuyệt đối bên phải để tiêu đề nằm đúng
+     giữa màn hình dù trang có nút hay không. Ở bề ngang điện thoại thì không
+     còn chỗ trống bên phải nữa: nút đè thẳng lên chữ (đo được "DASHBOARD" bị
+     che mất hơn nửa). Trả nút về luồng thường, cho xuống hàng riêng bên dưới. */
+  .pageshell-titlebar { flex-wrap: wrap; margin-bottom: 12px; }
+  .pageshell-titleaction {
+    position: static; transform: none;
+    flex: 1 0 100%; justify-content: center;
+  }
   .pageshell-footer-split { flex-wrap: wrap; }
   .pageshell-footer-split .pageshell-footer-left,
   .pageshell-footer-split .pageshell-actions { flex: 1 1 100%; }
