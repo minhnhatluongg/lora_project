@@ -383,16 +383,17 @@ th em { font-style: normal; font-weight: 400; color: var(--faint); }
 }
 
 /* Kinh mo that su: nhin xuyen thay video chay ben duoi.
-   Do dam 0.55 khong phai chon cho dep — do la muc thap nhat con giu duoc chu
-   trang doc ro khi phia sau la may trang xoa. Nhat hon nua thi luc may troi qua
-   la mat chu. Blur giup them, vi no boi phang cac mang sang toi nho. */
+   Do dam 0.46 la muc nhat nhat con dung duoc. Blur day len 30px de bu: no tron
+   dam may trang voi nen troi xanh quanh no, nen mang sang gay gat nhat bi keo
+   toi lai truoc khi chu nam len tren. Nhat hon nua nua thi luc may troi qua sau
+   the la chu mo di — ma video thi chuyen dong lien tuc. */
 .login-card {
   position: relative;
   z-index: 1;
   width: min(370px, calc(100vw - 32px));
-  background: rgba(6, 22, 14, 0.55);
-  backdrop-filter: blur(22px) saturate(1.3);
-  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  background: rgba(6, 22, 14, 0.46);
+  backdrop-filter: blur(30px) saturate(1.35);
+  -webkit-backdrop-filter: blur(30px) saturate(1.35);
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 20px;
   box-shadow:
@@ -411,7 +412,7 @@ th em { font-style: normal; font-weight: 400; color: var(--faint); }
   height: 40px;
   width: auto;
   max-width: 100%;
-  margin: 0 auto 18px;
+  margin: 0 auto 22px;
   padding: 7px 14px;
   background: #fff;
   border-radius: 10px;
@@ -426,12 +427,27 @@ th em { font-style: normal; font-weight: 400; color: var(--faint); }
 
 .login-brand {
   font-family: 'Instrument Serif', Georgia, 'Times New Roman', serif;
-  font-size: 34px; font-weight: 400; letter-spacing: 0.5px;
-  color: #fff; text-align: center; line-height: 1.1;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  font-size: 34px; font-weight: 400;
+  /* Gian chu ra cho thoang. Instrument Serif von hep ngang, de sat nhau thi
+     doc nhu mot khoi lien. */
+  letter-spacing: 4px;
+  /* Bu lai phan khoang trang thua ben phai chu cuoi, neu khong dong chu se
+     lech trai mot chut so voi tam the. */
+  text-indent: 4px;
+  color: #fff; text-align: center; line-height: 1.15;
+  margin-top: 4px;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
 }
-.login-sub { color: rgba(255,255,255,0.72); font-size: 13px; text-align: center; margin: 7px 0 22px; }
-.login-card label { font-size: 13px; color: rgba(255,255,255,0.75); margin-bottom: 5px; }
+/* The trong hon thi chu nho can mot vet bong rat nhe — khong phai de trang tri
+   ma de no khong bi nhoe khi dam may sang troi qua phia sau. */
+.login-sub {
+  color: rgba(255, 255, 255, 0.8); font-size: 13px; text-align: center;
+  margin: 10px 0 24px; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+.login-card label {
+  font-size: 13px; color: rgba(255, 255, 255, 0.82); margin-bottom: 5px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
 /* O nhap cung trong mo, nhung phai DAY hon nen the mot chut — neu bang nhau
    thi khong con nhin ra dau la cho go chu. */
 .login-card input {
