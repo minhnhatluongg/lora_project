@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
+import logoUrl from '../assets/logo.jpg';
 
 export function Login() {
   const { login } = useAuth();
@@ -26,10 +27,16 @@ export function Login() {
       <form className="login-card" onSubmit={submit}>
         {/* No emoji anywhere in this design; the login card wears the same
             brand block PageShell puts on every screen behind it. */}
-        <div className="login-org">
-          <span className="login-org-main">FPT Education</span>
-          <span className="login-org-sub">FPT POLYTECHNIC</span>
-        </div>
+        {/* Logo chính thức thay cho hai dòng chữ dựng bằng CSS — cùng một ảnh
+            với thanh tiêu đề trong PageShell, để không có hai phiên bản nhận
+            diện lệch nhau. */}
+        <img
+          className="login-logo"
+          src={logoUrl}
+          alt="FPT Education — FPT Polytechnic"
+          width="1260"
+          height="428"
+        />
         <div className="login-brand">SMART FARM</div>
         <p className="login-sub">Hệ thống nông nghiệp thông minh dùng LoRa</p>
 
@@ -55,7 +62,6 @@ export function Login() {
           {busy ? 'Đang đăng nhập…' : 'Đăng nhập'}
         </button>
 
-        <p className="login-hint">Mặc định: admin / admin123</p>
       </form>
     </div>
   );

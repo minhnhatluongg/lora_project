@@ -349,9 +349,16 @@ th em { font-style: normal; font-weight: 400; color: var(--faint); }
   border-radius: 16px; box-shadow: var(--shadow);
   padding: 28px; display: flex; flex-direction: column;
 }
-.login-org { display: flex; flex-direction: column; align-items: center; line-height: 1.2; margin-bottom: 14px; }
-.login-org-main { font-size: 18px; font-weight: 800; color: #f97316; letter-spacing: 0.3px; }
-.login-org-sub { font-size: 12px; font-weight: 700; color: var(--blue); letter-spacing: 0.9px; }
+/* Khoá chiều cao, để chiều rộng tự co theo tỉ lệ 1260x428. Khoá chiều rộng thì
+   thẻ đăng nhập sẽ giật một nhịp lúc ảnh vừa tải xong. */
+.login-logo {
+  display: block;
+  height: 44px;
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto 16px;
+  object-fit: contain;
+}
 .login-brand { font-size: 22px; font-weight: 700; color: var(--blue); text-align: center; letter-spacing: 1px; }
 .login-sub { color: var(--muted); font-size: 13px; text-align: center; margin: 6px 0 20px; }
 .login-card label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
