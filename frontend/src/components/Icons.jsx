@@ -456,3 +456,41 @@ export const IconBell = (p) => (
     <path d="M10.4 17.6a1.8 1.8 0 0 0 3.2 0" />
   </Svg>
 );
+
+// --- Quản lý tài khoản -------------------------------------------------------
+// Người kèm dấu cộng: khác rõ với IconUsers (hai người) ở cỡ 22px của tiêu đề.
+export const IconUserPlus = (p) => (
+  <Svg {...p}>
+    <circle cx="10" cy="8.2" r="3.6" />
+    <path d="M3.8 19.6c0-3.2 2.8-5.4 6.2-5.4 1.3 0 2.5.3 3.5.9" />
+    <path d="M17.4 14.6v5.2M20 17.2h-5.2" />
+  </Svg>
+);
+
+// Chìa khoá — đổi mật khẩu. Khác IconLock (ổ khoá đóng) vốn dùng cho "không đủ quyền".
+export const IconKey = (p) => (
+  <Svg {...p}>
+    <circle cx="8.2" cy="15.8" r="3.6" />
+    <path d="M10.8 13.2 19 5" />
+    <path d="M16.4 7.6l2 2M14.4 9.6l2 2" />
+  </Svg>
+);
+
+export const IconTrash = (p) => (
+  <Svg {...p}>
+    <path d="M4.6 6.8h14.8" />
+    <path d="M9.4 6.8V5.2a1.4 1.4 0 0 1 1.4-1.4h2.4a1.4 1.4 0 0 1 1.4 1.4v1.6" />
+    <path d="M6.6 6.8l.8 12.1a1.6 1.6 0 0 0 1.6 1.5h6a1.6 1.6 0 0 0 1.6-1.5l.8-12.1" />
+    <path d="M10.4 10.4v6.4M13.6 10.4v6.4" />
+  </Svg>
+);
+
+// Ổ khoá MỞ — hành động "mở khoá tài khoản". Quai bật sang phải, nhìn cỡ nhỏ
+// vẫn phân biệt được với IconLock nhờ quai không khép kín.
+export const IconUnlock = (p) => (
+  <Svg {...p}>
+    <rect x="4.4" y="10.2" width="15.2" height="10.4" rx="2.2" />
+    <path d="M8.2 10.2V7.4a3.8 3.8 0 0 1 7.4-1.3" />
+    <path d="M12 14.2v2.6" />
+  </Svg>
+);
