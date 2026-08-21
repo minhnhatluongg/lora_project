@@ -1,0 +1,203 @@
+/* ===========================================================================
+   Hai bảng chẩn đoán ở cuối DASHBOARD: chất lượng sóng LoRa và đường đi của
+   lệnh. Dùng chung file này vì chúng luôn đứng cạnh nhau và chia cùng một bộ
+   ô thống kê. Mọi lớp mang tiền tố `diag-` hoặc `cmd-`.
+
+   Cả hai đều vẽ dữ liệu ĐÃ CÓ SẴN trong CSDL từ trước mà chưa màn hình nào
+   đọc tới: `telemetry.lora_rssi` và bốn cột thời gian của bảng `commands`.
+   =========================================================================== */
+
+.diag-panel { min-width: 0; }
+.diag-panel .panel-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.diag-panel .panel-head h3 svg { color: var(--blue); flex-shrink: 0; }
+
+.diag-headline {
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.diag-headline strong {
+  color: var(--text);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.diag-note {
+  margin: -6px 0 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.diag-note strong { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Lời cảnh báo về giới hạn của phép đo. Cố ý đặt NGAY DƯỚI các con số chứ
+   không giấu vào chú thích cuối trang: một con số kèm điều kiện thì phải đọc
+   được cùng lúc với điều kiện của nó. */
+.diag-caveat {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  border-left: 3px solid #cbd5e1;
+  background: var(--panel-2);
+  border-radius: 0 8px 8px 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.diag-caveat strong { color: var(--text); font-weight: 700; }
+
+.diag-msg {
+  display: flex; align-items: center; gap: 7px;
+  margin: 0 0 10px;
+  font-size: 12.5px; font-weight: 600;
+}
+.diag-msg svg { flex-shrink: 0; }
+.diag-msg.is-bad { color: var(--red); }
+
+.diag-empty {
+  margin: 0; padding: 26px 12px;
+  text-align: center; color: var(--muted); font-size: 13px;
+}
+
+/* ---- Biểu đồ sóng ---- */
+.diag-chart { height: 190px; width: 100%; min-width: 0; }
+
+/* ---- Ô thống kê ---- */
+/* auto-fit + minmax: số ô đổi theo bề ngang thật của panel chứ không theo bậc
+   màn hình, vì bảng này nằm trong lưới hai cột — bề ngang của nó không suy ra
+   được từ bề ngang cửa sổ. */
+.diag-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.diag-stat {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  min-width: 0;
+}
+.diag-stat-label {
+  font-size: 10.5px; font-weight: 600; color: var(--muted);
+  line-height: 1.3;
+}
+.diag-stat-value {
+  font-size: 15px; font-weight: 800; color: var(--text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.diag-stat-value em { font-style: normal; font-size: 10.5px; font-weight: 600; color: var(--muted); }
+/* Sắc chỉ là lớp nhấn thêm — nhãn chữ bên trên đã nói ô này là gì rồi. */
+.diag-tone-ok .diag-stat-value { color: var(--green); }
+.diag-tone-warn .diag-stat-value { color: var(--amber); }
+.diag-tone-bad .diag-stat-value { color: var(--red); }
+
+/* ===========================================================================
+   Đường đi của lệnh
+   =========================================================================== */
+
+.cmd-legend {
+  display: flex; flex-wrap: wrap; gap: 6px 16px;
+  margin: 0 0 12px;
+  font-size: 11px; color: var(--muted);
+}
+.cmd-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.cmd-key {
+  width: 14px; height: 8px; border-radius: 2px; flex-shrink: 0;
+}
+
+.cmd-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+
+.cmd-row {
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.cmd-row.is-pending { background: #fffdf5; border-color: #fde68a; }
+.cmd-row.is-failed { background: #fff5f5; border-color: #fecaca; }
+
+.cmd-head {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-bottom: 7px;
+}
+.cmd-what { display: inline-flex; align-items: baseline; gap: 7px; min-width: 0; }
+.cmd-what strong { font-size: 13px; font-weight: 700; }
+.cmd-what em {
+  font-style: normal; font-size: 11px; font-weight: 800;
+  letter-spacing: 0.4px; color: var(--blue);
+}
+.cmd-time {
+  font-size: 11.5px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cmd-status {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-left: auto;
+  padding: 2px 9px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; white-space: nowrap;
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+}
+.cmd-status svg { flex-shrink: 0; }
+.cmd-status.is-acked { background: #dcfce7; border-color: #bbf7d0; color: #14532d; }
+.cmd-status.is-pending { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.cmd-status.is-sent { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+.cmd-status.is-failed { background: #fee2e2; border-color: #fecaca; color: #991b1b; }
+
+.cmd-retry {
+  padding: 2px 8px; border-radius: 999px;
+  background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;
+  font-size: 10.5px; font-weight: 700; white-space: nowrap;
+}
+
+/* ---- Dải thời gian ---- */
+.cmd-bar {
+  display: flex;
+  height: 9px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+.cmd-seg { display: block; height: 100%; min-width: 2px; }
+/* Ba đoạn, ba việc khác nhau — mỗi đoạn đều có nhãn chữ ở chú giải phía trên
+   và một `title` khi rê chuột, nên không có tin nào chỉ nằm ở màu. */
+.cmd-seg-hold { background: #a78bfa; }   /* giữ lại theo lịch (giãn cách bật dàn) */
+.cmd-seg-wait { background: #fbbf24; }   /* nằm chờ ESP32 hỏi tới */
+.cmd-seg-run  { background: #22c55e; }   /* phần cứng thật sự làm việc */
+
+.cmd-steps {
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  margin-top: 7px;
+  font-size: 11px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.cmd-steps b { font-weight: 600; color: var(--faint); margin-right: 3px; }
+.cmd-total { margin-left: auto; color: var(--text); font-weight: 700; }
+.cmd-total b { color: var(--muted); }
+
+/* ---- Thu nhỏ theo bậc, khớp các bậc trong styles.css ---- */
+@media (max-width: 1100px), (max-height: 700px) {
+  .diag-chart { height: 160px; }
+  .diag-stat { padding: 7px 9px; }
+  .diag-stat-value { font-size: 14px; }
+}
+
+@media (max-width: 620px) {
+  .diag-chart { height: 150px; }
+  .diag-stats { grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 6px; }
+  .diag-note { margin-bottom: 10px; }
+
+  /* Giờ và trạng thái xuống hàng riêng: nhồi bốn thứ vào một hàng ở 390px thì
+     tên thiết bị bị bóp còn vài ký tự. */
+  .cmd-status { margin-left: 0; }
+  .cmd-total { margin-left: 0; flex-basis: 100%; }
+}

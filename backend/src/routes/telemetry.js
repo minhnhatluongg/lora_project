@@ -176,6 +176,99 @@ telemetryRouter.get(
   })
 );
 
+// Chất lượng đường truyền LoRa theo thời gian. ?hours=24
+//
+// Mỗi dòng đo đã mang sẵn `lora_rssi` — cường độ sóng lúc ESP32 nhận gói từ
+// node cảm biến — nhưng cả giao diện chỉ hiện đúng MỘT con số hiện tại. Một
+// con số không nói được đường truyền có ổn định không, mà đó lại là câu hỏi
+// trung tâm của một hệ LoRa.
+//
+// VỀ "MẤT GÓI": giao thức giữa hai node KHÔNG có số thứ tự gói, nên không có
+// cách nào đếm đúng số gói đã mất — nói "tỉ lệ mất gói x%" là bịa. Thứ đo được
+// thật là KHOẢNG TRỐNG: quãng thời gian dài bất thường giữa hai dòng đo liên
+// tiếp. Ngưỡng "bất thường" lấy từ chính dữ liệu (bội số của khoảng cách trung
+// vị) chứ không cắm cứng, để còn đúng khi nhịp gửi của firmware thay đổi.
+telemetryRouter.get(
+  '/link',
+  requireAuth,
+  asyncH((req, res) => {
+    const hours = Math.min(Math.max(Number(req.query.hours) || 24, 1), 8760);
+    const points = Math.min(Math.max(Number(req.query.points) || 240, 12), 2000);
+    const bucketSeconds = Math.max(1, Math.ceil((hours * 3600) / points));
+    const since = `-${hours} hours`;
+
+    // Một điểm cho mỗi ô thời gian. Ô nào KHÔNG có dòng đo nào thì không xuất
+    // hiện ở đây — phía giao diện chèn null vào chỗ trống để đường gãy ra, nên
+    // lúc mất liên lạc nhìn thấy ngay bằng mắt chứ không bị nối liền qua.
+    const series = db
+      .prepare(
+        `SELECT MIN(created_at)          AS t,
+                ROUND(AVG(lora_rssi), 1) AS rssi,
+                MIN(lora_rssi)           AS worst,
+                COUNT(*)                 AS n
+           FROM telemetry
+          WHERE created_at >= datetime('now', ?) AND lora_rssi IS NOT NULL
+          GROUP BY CAST(strftime('%s', created_at) AS INTEGER) / CAST(? AS INTEGER)
+          ORDER BY t ASC`
+      )
+      .all(since, bucketSeconds);
+
+    const stats = db
+      .prepare(
+        `SELECT COUNT(*)                 AS samples,
+                ROUND(AVG(lora_rssi), 1) AS avg,
+                MAX(lora_rssi)           AS best,
+                MIN(lora_rssi)           AS worst
+           FROM telemetry
+          WHERE created_at >= datetime('now', ?) AND lora_rssi IS NOT NULL`
+      )
+      .get(since);
+
+    // Khoảng cách giữa hai dòng đo liên tiếp, tính bằng giây.
+    const GAPS = `
+      WITH g AS (
+        SELECT (julianday(created_at)
+                - julianday(LAG(created_at) OVER (ORDER BY created_at))) * 86400.0 AS s
+          FROM telemetry WHERE created_at >= datetime('now', ?)
+      )`;
+
+    // Trung vị, KHÔNG phải trung bình: một lần mất mạng nửa tiếng kéo trung bình
+    // lên và làm chính cái ngưỡng phát hiện mất mạng trở nên vô dụng.
+    const median = db
+      .prepare(
+        `${GAPS}
+         SELECT s FROM g WHERE s IS NOT NULL ORDER BY s
+          LIMIT 1 OFFSET (SELECT COUNT(*) / 2 FROM g WHERE s IS NOT NULL)`
+      )
+      // MỘT tham số, không phải hai: CTE `g` chỉ chứa một dấu `?`, còn truy vấn
+      // ngoài dùng lại chính CTE đó chứ không gắn thêm lần nữa.
+      .get(since);
+
+    const typical = median?.s ?? null;
+    // Gấp 5 lần nhịp thường, và tối thiểu 30 giây — dưới mức đó thì một lần
+    // chậm do WiFi cũng bị đếm thành mất liên lạc.
+    const threshold = typical ? Math.max(typical * 5, 30) : 30;
+
+    const gaps = db
+      .prepare(`${GAPS} SELECT COUNT(*) AS n, MAX(s) AS worst FROM g WHERE s > ?`)
+      .get(since, threshold);
+
+    res.json({
+      hours,
+      bucketSeconds,
+      series,
+      samples: stats.samples || 0,
+      avgRssi: stats.avg,
+      bestRssi: stats.best,
+      worstRssi: stats.worst,
+      typicalIntervalSeconds: typical ? Math.round(typical * 10) / 10 : null,
+      gapThresholdSeconds: Math.round(threshold),
+      gapCount: gaps.n || 0,
+      longestGapSeconds: gaps.worst ? Math.round(gaps.worst) : null,
+    });
+  })
+);
+
 // Most recent N rows for the "latest data" table. ?limit=10
 telemetryRouter.get(
   '/recent',

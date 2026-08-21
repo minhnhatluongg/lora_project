@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFarm } from '../useFarm.js';
 import { api } from '../api.js';
 import { PageShell } from '../components/PageShell.jsx';
+import { LinkQualityPanel } from '../components/LinkQualityPanel.jsx';
+import { CommandTimeline } from '../components/CommandTimeline.jsx';
 import { OverviewCards } from '../components/OverviewCards.jsx';
 import { SystemCards } from '../components/SystemCards.jsx';
 import { RealtimeCharts } from '../components/RealtimeCharts.jsx';
@@ -152,6 +154,15 @@ export function Dashboard() {
           <section className="dash-grid dash-grid-even">
             <RecentTable rows={farm.recent} />
             <AlertsList alerts={farm.alerts} />
+          </section>
+
+          {/* Hai bảng chẩn đoán. Cả hai chỉ đọc dữ liệu đã nằm sẵn trong CSDL
+              từ trước mà chưa màn hình nào dùng tới: cường độ sóng của từng
+              gói, và bốn mốc thời gian của từng lệnh. Đặt cuối trang vì đây là
+              phần đọc khi đi tìm nguyên nhân, không phải phần liếc hằng ngày. */}
+          <section className="dash-grid dash-grid-even">
+            <LinkQualityPanel />
+            <CommandTimeline />
           </section>
         </>
       )}

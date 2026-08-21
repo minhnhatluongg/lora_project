@@ -104,6 +104,12 @@ export const api = {
   // config; users, telemetry and the alert log are left alone.
   restoreDefaults: () => req('/api/system/restore-defaults', { method: 'POST' }),
 
+  // --- chẩn đoán đường truyền & lệnh ---------------------------------------
+  // Chất lượng sóng LoRa theo thời gian, kèm thống kê khoảng trống dữ liệu.
+  linkQuality: (hours = 24) => req(`/api/telemetry/link?hours=${hours}`),
+  // Nhật ký lệnh gần đây, kèm bốn mốc thời gian của từng lệnh.
+  recentCommands: (limit = 25) => req(`/api/commands/recent?limit=${limit}`),
+
   // --- công việc ----------------------------------------------------------
   // Con số cho huy hiệu đỏ. Gọi thường xuyên (lúc mở trang, lúc nghe chuông
   // socket, lúc quay lại tab) nên cố ý tách khỏi endpoint danh sách: nó chỉ trả

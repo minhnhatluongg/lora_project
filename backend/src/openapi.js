@@ -346,6 +346,33 @@ export const openapiSpec = {
         responses: { 200: { description: 'OK' } },
       },
     },
+    '/api/telemetry/link': {
+      get: {
+        tags: ['Telemetry'],
+        summary: 'Chất lượng sóng LoRa theo thời gian + khoảng trống dữ liệu',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'hours', in: 'query', schema: { type: 'integer', default: 24 } },
+          { name: 'points', in: 'query', schema: { type: 'integer', default: 240 },
+            description: 'Số điểm vẽ trải đều khung thời gian' },
+        ],
+        responses: { 200: { description:
+          '{ series[], samples, avgRssi, bestRssi, worstRssi, typicalIntervalSeconds, ' +
+          'gapThresholdSeconds, gapCount, longestGapSeconds }. LƯU Ý: gapCount đếm quãng im ' +
+          'lặng bất thường, KHÔNG phải số gói mất — giao thức không đánh số thứ tự gói.' } },
+      },
+    },
+    '/api/commands/recent': {
+      get: {
+        tags: ['Commands'],
+        summary: 'Nhật ký lệnh gần đây kèm bốn mốc thời gian',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 25 } }],
+        responses: { 200: { description:
+          'Mỗi lệnh kèm holdSeconds (giữ lại có chủ ý), waitSeconds (tới lúc ESP32 lấy đi), ' +
+          'runSeconds (phần cứng thực thi), totalSeconds (trọn vòng).' } },
+      },
+    },
     '/api/tasks/summary': {
       get: {
         tags: ['Tasks'], summary: 'Số việc chưa xong của tôi (huy hiệu đỏ)', security: [{ bearerAuth: [] }],

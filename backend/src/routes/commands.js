@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { deviceAuth, asyncH } from '../middleware.js';
+import { requireAuth } from '../auth.js';
 import { setDeviceState, setMode, touchMaster, sweepCommands } from '../services.js';
 
 export const commandsRouter = Router();
@@ -74,5 +75,64 @@ commandsRouter.post(
     }
 
     res.json({ ok: true });
+  })
+);
+
+// Nhật ký lệnh gần đây, kèm bốn mốc thời gian của mỗi lệnh. ?limit=25
+//
+// Bảng `commands` xưa nay ghi đủ created_at -> run_after -> sent_at -> acked_at
+// và số lần thử, nhưng không màn hình nào đọc tới. Đó là chỗ tiếc: chính bốn
+// mốc đó cho thấy vì sao phải có hàng đợi thay vì gọi thẳng xuống ESP32 —
+// ESP32 nằm sau NAT, server không mở kết nối tới nó được, nên lệnh phải NẰM
+// CHỜ tới lượt nó hỏi.
+//
+// Các quãng thời gian tính ở đây chứ không ở trình duyệt: chúng lấy mốc từ
+// datetime('now') của SQLite, nên phải trừ nhau trong cùng một đồng hồ. Đưa
+// bốn chuỗi thô cho trình duyệt tự trừ là mời đúng cái lỗi lệch múi giờ.
+commandsRouter.get(
+  '/recent',
+  requireAuth,
+  asyncH((req, res) => {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 200);
+    const rows = db
+      .prepare(
+        `SELECT id, device_id, action, status, attempts,
+                created_at, run_after, sent_at, acked_at,
+                -- Giữ hàng: từ lúc xếp hàng tới lúc ESP32 thật sự lấy đi.
+                CASE WHEN sent_at IS NOT NULL
+                     THEN ROUND((julianday(sent_at) - julianday(created_at)) * 86400.0, 1) END AS wait_s,
+                -- Thực thi: từ lúc ESP32 nhận tới lúc rơ-le báo đã làm xong.
+                CASE WHEN acked_at IS NOT NULL AND sent_at IS NOT NULL
+                     THEN ROUND((julianday(acked_at) - julianday(sent_at)) * 86400.0, 1) END AS run_s,
+                -- Trọn vòng: bấm nút cho tới khi phần cứng xác nhận.
+                CASE WHEN acked_at IS NOT NULL
+                     THEN ROUND((julianday(acked_at) - julianday(created_at)) * 86400.0, 1) END AS total_s,
+                -- Phần bị GIỮ LẠI có chủ ý (giãn cách bật cả dàn), tách khỏi
+                -- phần chờ do ESP32 chưa hỏi tới — hai thứ khác hẳn nhau.
+                CASE WHEN run_after IS NOT NULL
+                     THEN ROUND((julianday(run_after) - julianday(created_at)) * 86400.0, 1) END AS hold_s
+           FROM commands
+          ORDER BY id DESC
+          LIMIT ?`
+      )
+      .all(limit);
+
+    res.json(
+      rows.map((r) => ({
+        id: r.id,
+        deviceId: r.device_id,
+        action: r.action,
+        status: r.status,
+        attempts: r.attempts,
+        createdAt: r.created_at,
+        runAfter: r.run_after,
+        sentAt: r.sent_at,
+        ackedAt: r.acked_at,
+        holdSeconds: r.hold_s,
+        waitSeconds: r.wait_s,
+        runSeconds: r.run_s,
+        totalSeconds: r.total_s,
+      }))
+    );
   })
 );
