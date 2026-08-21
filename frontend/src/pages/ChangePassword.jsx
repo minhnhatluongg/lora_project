@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PageShell } from '../components/PageShell.jsx';
-import { api } from '../api.js';
+import { api, tokenStore } from '../api.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { socket } from '../socket.js';
 import { IconLock } from '../components/Icons.jsx';
@@ -62,9 +62,17 @@ export function ChangePassword() {
 
     setBusy(true);
     try {
-      await api.changePassword(form.current, form.next);
+      // Đổi mật khẩu khai tử MỌI token đã phát cho tài khoản này — kể cả cái
+      // đang dùng để gửi chính lời gọi vừa rồi. Backend trả lại một token mới;
+      // không thay vào đây thì thao tác kế tiếp ăn 401 và người dùng bị đá ra
+      // ngay sau khi đổi mật khẩu thành công.
+      const res = await api.changePassword(form.current, form.next);
+      if (res?.token) tokenStore.set(res.token);
       setForm(EMPTY);
-      setMsg({ text: 'Đổi mật khẩu thành công.', ok: true });
+      setMsg({
+        text: 'Đổi mật khẩu thành công. Các thiết bị khác đang đăng nhập sẽ phải đăng nhập lại.',
+        ok: true,
+      });
     } catch (err) {
       setMsg({ text: err.message || 'Đổi mật khẩu thất bại. Vui lòng thử lại.', ok: false });
     } finally {

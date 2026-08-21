@@ -8,7 +8,10 @@ export const config = {
     .map((s) => s.trim()),
   deviceApiKey: process.env.DEVICE_API_KEY || '',
   jwtSecret: process.env.JWT_SECRET || 'changeme-jwt-secret',
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '12h',
+  // 2 giờ, không phải 12. Token là JWT không trạng thái nên thời gian sống CHÍNH
+  // LÀ cửa sổ rủi ro nếu nó bị lộ; cột users.token_valid_after chỉ thu hồi được
+  // khi ai đó chủ động đổi mật khẩu, còn hạn ngắn thì tự đóng cửa sổ đó lại.
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '2h',
   seedAdmin: {
     username: process.env.SEED_ADMIN_USERNAME || 'admin',
     password: process.env.SEED_ADMIN_PASSWORD || 'admin123',

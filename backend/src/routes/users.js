@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { asyncH } from '../middleware.js';
-import { requireAuth, adminOnly, hashPassword, ROLES } from '../auth.js';
+import { requireAuth, adminOnly, hashPassword, ROLES, revokeSessions } from '../auth.js';
 
 export const usersRouter = Router();
 
@@ -93,6 +93,16 @@ usersRouter.patch(
 
     params.push(id);
     db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+
+    // Admin đặt lại mật khẩu hộ ai đó thì phiên đang mở của người đó phải chết
+    // ngay — nếu không, việc đặt lại mật khẩu vì nghi lộ tài khoản chẳng đuổi
+    // được ai ra cả.
+    //
+    // Khóa tài khoản (active = 0) KHÔNG cần dấu mốc: requireAuth đọc thẳng cột
+    // `active` mỗi lời gọi, nên nó có tác dụng tức thì. Đổi vai trò cũng vậy —
+    // vai trò lấy từ CSDL chứ không lấy từ token.
+    if (password) revokeSessions(id);
+
     const updated = db.prepare(`SELECT * FROM users WHERE id = ?`).get(id);
     res.json(publicUser(updated));
   })

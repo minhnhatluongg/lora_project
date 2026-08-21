@@ -289,7 +289,11 @@ export const openapiSpec = {
         summary: 'Tự đổi mật khẩu (mọi tài khoản đã đăng nhập)',
         description:
           'Đổi mật khẩu của CHÍNH tài khoản đang đăng nhập. Admin đặt lại mật khẩu ' +
-          'cho người khác qua `PATCH /api/users/{id}`. Mật khẩu mới tối thiểu 6 ký tự.',
+          'cho người khác qua `PATCH /api/users/{id}`. Mật khẩu mới tối thiểu 6 ký tự. ' +
+          'THU HỒI PHIÊN: đổi mật khẩu khai tử MỌI token đã phát cho tài khoản này ' +
+          '(users.token_valid_after). Vì token đang dùng cũng chết theo, phản hồi trả ' +
+          'kèm `token` mới — client phải thay vào chỗ token cũ, nếu không lời gọi kế ' +
+          'tiếp sẽ nhận 401.',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,

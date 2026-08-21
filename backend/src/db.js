@@ -352,6 +352,28 @@ if (Number(getMeta('schema_version') || 1) < 10) {
   setMeta('schema_version', 10);
 }
 
+// v11: thu hồi phiên đăng nhập.
+//
+// Token đăng nhập là JWT không trạng thái — máy chủ không giữ danh sách phiên
+// nào cả, nên trước đây KHÔNG có cách nào chấm dứt một phiên trước hạn. Khóa
+// tài khoản, đổi mật khẩu, thậm chí bấm "Đăng xuất" đều không đụng được tới cái
+// token đã phát ra: nó sống đủ 12 tiếng dù có chuyện gì xảy ra.
+//
+// Cột này là cái mốc: mọi token phát TRƯỚC thời điểm ghi ở đây đều bị từ chối.
+// Một cột, không cần bảng phiên, không cần Redis — nhưng đủ để đổi mật khẩu là
+// mọi phiên khác chết ngay.
+// NULL = chưa từng thu hồi, mọi token còn hạn đều dùng được.
+if (Number(getMeta('schema_version') || 1) < 11) {
+  const has = db
+    .prepare(`SELECT 1 FROM pragma_table_info('users') WHERE name = 'token_valid_after'`)
+    .get();
+  if (!has) {
+    db.prepare(`ALTER TABLE users ADD COLUMN token_valid_after TEXT`).run();
+    console.log(`[db] migrated: thêm cột users.token_valid_after (thu hồi phiên)`);
+  }
+  setMeta('schema_version', 11);
+}
+
 // --- Seed default rows if missing -------------------------------------------
 // Five pumps and four valves, matching the relay board on the panel drawing.
 const defaultDevices = [

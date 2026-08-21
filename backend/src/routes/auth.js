@@ -6,6 +6,7 @@ import {
   verifyPassword,
   hashPassword,
   signToken,
+  revokeSessions,
 } from '../auth.js';
 
 // Short enough for a gloved hand on a touch panel, long enough to be worth
@@ -84,6 +85,21 @@ authRouter.post(
       hashPassword(newPassword),
       user.id
     );
-    res.json({ ok: true });
+
+    // Đổi mật khẩu là cách duy nhất người dùng tự cắt được một token bị lộ:
+    // JWT không trạng thái nên "Đăng xuất" chỉ xoá bản sao trong trình duyệt
+    // này, còn bản bị đánh cắp vẫn chạy tới khi hết hạn. Dấu mốc dưới đây khai
+    // tử MỌI token đã phát trước thời điểm này.
+    const cutoff = revokeSessions(user.id);
+
+    // ...kể cả token người dùng đang cầm — nên phát ngay một cái mới, nếu không
+    // họ vừa đổi mật khẩu xong là bị chính hệ thống đá ra. Frontend thay token
+    // cũ bằng token này (ChangePassword.jsx).
+    //
+    // `cutoff + 1` không phải mẹo vặt: requireAuth từ chối mọi token có
+    // iat <= mốc thu hồi, mà token phát ngay lúc này thường trúng đúng giây đó.
+    // Đẩy mốc phát hành lên một giây để nó nằm hẳn về phía sau lằn ranh.
+    const fresh = db.prepare(`SELECT * FROM users WHERE id = ?`).get(user.id);
+    res.json({ ok: true, token: signToken(fresh, cutoff + 1) });
   })
 );
