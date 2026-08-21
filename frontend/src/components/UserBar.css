@@ -67,6 +67,36 @@
 
 .userbar-link { text-decoration: none; }
 
+/* Chuông việc: đỏ đặc và mang con số, không phải chấm đỏ. Ngồi cạnh vai trò nên
+   phải nhỏ hơn hai nút bên phải, đủ để nhận ra chứ không cướp mắt khỏi trang. */
+.userbar-tasks {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  border: 1px solid #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.userbar-tasks:hover { background: #fee2e2; border-color: #f87171; }
+.userbar-tasks:active { transform: translateY(1px); }
+.userbar-tasks-n { font-variant-numeric: tabular-nums; }
+
+/* Có việc quá hạn thì đảo thành nền đỏ đặc — nặng hơn một bậc so với "có việc",
+   và cái tooltip nói rõ bao nhiêu việc quá hạn chứ không để màu tự nói. */
+.userbar-tasks.is-overdue {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.userbar-tasks.is-overdue:hover { background: #b91c1c; border-color: #b91c1c; }
+
 .userbar-link:hover {
   color: var(--blue);
   border-color: #bfd4ff;
@@ -99,6 +129,7 @@
   .userbar-role { font-size: 10.5px; padding: 2px 8px; }
   .userbar-link,
   .userbar-logout { font-size: 11px; padding: 3px 10px 3px 8px; gap: 5px; }
+  .userbar-tasks { font-size: 11px; padding: 3px 9px 3px 7px; gap: 4px; }
 
   /* Con số 64px ở trên tính theo thanh cao đúng 26px. Trên điện thoại thanh có
      thể xuống hai hàng, và trang cuộn là chuyện bình thường — giữ min-height

@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom';
 import { PageShell } from '../components/PageShell.jsx';
 import { useAuth, can } from '../auth/AuthContext.jsx';
 import { socket } from '../socket.js';
+import { useTaskBadge } from '../tasks/TaskBadgeContext.jsx';
 import {
   IconDashboard,
   IconControl,
   IconGear,
   IconInfo,
+  IconTasks,
   IconLock,
   IconLogout,
   IconChevronRight,
@@ -53,11 +55,14 @@ const ITEMS = [
     gate: can.config,
   },
   {
-    id: 'about',
-    to: '/about',
-    title: 'ABOUT',
-    desc: ['Thông tin dự án, nhóm thực hiện', 'và phiên bản phần mềm'],
-    Icon: IconInfo,
+    id: 'tasks',
+    to: '/tasks',
+    title: 'CÔNG VIỆC',
+    desc: ['Việc được giao, tiến độ', 'và nhắc hạn'],
+    Icon: IconTasks,
+    // Ô duy nhất mang huy hiệu đếm. ABOUT trước ở chỗ này; trang đó vẫn còn,
+    // giờ vào từ cuối trang SETTINGS.
+    badge: true,
   },
   {
     id: 'change-password',
@@ -80,14 +85,25 @@ const ITEMS = [
 // Icon tile, then title / accent rule / description, then the affordance on the
 // right. The accent rule is the design's divider between the title and the body
 // copy; it inherits `--menu-accent` so it turns red on the account pair.
-function CardInner({ Icon, title, desc, locked }) {
+function CardInner({ Icon, title, desc, locked, badge }) {
   return (
     <>
       <span className="menu-card-icon">
         <Icon size={96} />
+        {/* Huy hiệu mang CON SỐ chứ không phải chấm đỏ suông — cùng lý do với ổ
+            khoá "Không đủ quyền" bên dưới: một mảng màu không nói được điều gì
+            trên màn hình đơn sắc, và "có việc" khác hẳn "có bảy việc". */}
+        {badge > 0 && (
+          <span className="menu-card-badge" aria-hidden="true">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
       </span>
       <span className="menu-card-text">
-        <strong className="menu-card-title">{title}</strong>
+        <strong className="menu-card-title">
+          {title}
+          {badge > 0 && <span className="pageshell-sr"> — {badge} việc chưa xong</span>}
+        </strong>
         <span className="menu-card-rule" aria-hidden="true" />
         <span className="menu-card-desc">
           {desc.map((line) => (
@@ -115,6 +131,7 @@ function CardInner({ Icon, title, desc, locked }) {
 
 export function Menu() {
   const { user, logout } = useAuth();
+  const { summary } = useTaskBadge();
   const role = user?.role;
 
   // MENU is the screen the panel idles on, so its link lamp is the one an
@@ -149,6 +166,7 @@ export function Menu() {
           // muscle memory would land on the wrong tile. Render all six and
           // disable instead. App.jsx still guards the routes.
           const locked = Boolean(item.gate && !item.gate(role));
+          const badge = item.badge ? summary.open : 0;
           const className = [
             'menu-card',
             item.tone === 'danger' ? 'menu-card-danger' : '',
@@ -176,7 +194,7 @@ export function Menu() {
 
           return (
             <Link key={item.id} className={className} to={item.to}>
-              <CardInner Icon={item.Icon} title={item.title} desc={item.desc} />
+              <CardInner Icon={item.Icon} title={item.title} desc={item.desc} badge={badge} />
             </Link>
           );
         })}

@@ -1,0 +1,217 @@
+/* Trang CÔNG VIỆC (route /tasks). Mọi lớp ở đây đều mang tiền tố `task-`;
+   `.panel` và `.seg` lấy từ styles.css và trang này không sửa chúng. */
+
+.task-wrap { display: flex; flex-direction: column; }
+
+/* ---- Thanh lọc ---- */
+.task-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+}
+.task-views { flex-wrap: wrap; }
+
+.task-toggle {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--muted); cursor: pointer;
+}
+.task-toggle input { width: 16px; height: 16px; cursor: pointer; }
+
+.task-count {
+  display: inline-flex; align-items: center; gap: 7px;
+  margin-left: auto;
+  font-size: 13px; font-weight: 600; color: var(--muted);
+}
+.task-count svg { color: var(--blue); }
+
+/* ---- Dòng nhắc người giao ---- */
+.task-chase {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; margin-bottom: 14px; padding: 12px 16px;
+  border: 1px solid #fecaca; background: #fff5f5;
+  border-radius: var(--radius);
+  color: #991b1b; font: inherit; font-size: 13.5px; text-align: left;
+  cursor: pointer;
+}
+.task-chase:hover { background: #fee2e2; }
+.task-chase svg { flex-shrink: 0; }
+.task-chase strong { font-weight: 800; }
+.task-chase em { margin-left: auto; font-style: normal; font-weight: 700; white-space: nowrap; }
+
+/* ---- Ô giao việc mới ---- */
+.task-new {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.task-new h3 { grid-column: 1 / -1; margin: 0; }
+
+.task-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.task-field-wide { grid-column: 1 / -1; }
+.task-field > span { font-size: 12px; font-weight: 600; color: var(--muted); }
+.task-field > span em { font-style: normal; font-weight: 400; color: var(--faint); }
+
+.task-field input,
+.task-field select,
+.task-field textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+}
+.task-field textarea { resize: vertical; min-height: 46px; }
+.task-field input:focus-visible,
+.task-field select:focus-visible,
+.task-field textarea:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+.task-new-foot {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+
+/* ---- Nút ---- */
+.task-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 15px;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: var(--panel); color: var(--text);
+  font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+.task-btn:hover:not(:disabled) { background: var(--panel-2); border-color: #b9c8e4; }
+.task-btn:active:not(:disabled) { transform: translateY(1px); }
+.task-btn:disabled { opacity: 0.6; cursor: progress; }
+
+.task-btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.task-btn-primary:hover:not(:disabled) { background: #1d4ed8; border-color: #1d4ed8; }
+.task-btn-done { background: #dcfce7; border-color: #86efac; color: #14532d; }
+.task-btn-done:hover:not(:disabled) { background: #bbf7d0; border-color: #4ade80; }
+.task-btn-danger { color: var(--red); border-color: #fecaca; }
+.task-btn-danger:hover:not(:disabled) { background: #fff5f5; border-color: #fca5a5; }
+
+/* ---- Danh sách ---- */
+.task-list { display: flex; flex-direction: column; gap: 12px; }
+
+.task-card {
+  --task-accent: var(--border);
+  position: relative;
+  padding: 14px 16px 14px 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--task-accent);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+/* Mức ưu tiên nhận ra bằng vạch màu bên trái, NHƯNG mức cao còn có nhãn chữ
+   "Ưu tiên cao" ở đầu thẻ — vạch màu một mình không phải là thông tin. */
+.task-p-high { --task-accent: #f97316; }
+.task-p-normal { --task-accent: #93b4f0; }
+.task-p-low { --task-accent: #cbd5e1; }
+.task-card.is-overdue { --task-accent: var(--red); background: #fffbfb; }
+.task-card.is-done { --task-accent: #86efac; opacity: 0.78; }
+.task-card.is-done .task-card-title { text-decoration: line-through; text-decoration-color: #94a3b8; }
+
+.task-card-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.task-card-title { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.35; }
+
+.task-flags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.task-flag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+  background: var(--panel-2); color: var(--muted);
+  border: 1px solid var(--border);
+}
+.task-flag-high { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
+.task-flag-overdue { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+/* "Chưa bắt đầu" là trạng thái cần người ta để mắt tới nên đậm hơn hai trạng
+   thái kia — nhưng vẫn có CHỮ, màu chỉ là lớp nhấn thêm. */
+.task-status-new { background: #fff1f2; border-color: #fecdd3; color: #9f1239; }
+.task-status-doing { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.task-status-done { background: #dcfce7; border-color: #bbf7d0; color: #14532d; }
+
+.task-card-body {
+  margin: 8px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.task-meta {
+  display: flex; flex-wrap: wrap; gap: 6px 22px;
+  margin: 10px 0 0;
+}
+.task-meta div { display: flex; align-items: baseline; gap: 7px; }
+.task-meta dt { font-size: 11.5px; color: var(--faint); }
+.task-meta dd { margin: 0; font-size: 12.5px; font-weight: 600; }
+.task-due-bad { color: var(--red); }
+
+.task-result {
+  display: flex; align-items: flex-start; gap: 7px;
+  margin: 10px 0 0; padding: 8px 11px;
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 9px;
+  font-size: 12.5px; color: #14532d;
+}
+.task-result svg { flex-shrink: 0; margin-top: 1px; }
+
+.task-actions {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.task-actions-owner { border-top: none; padding-top: 0; margin-top: 9px; }
+
+.task-note-input {
+  flex: 1 1 190px; min-width: 0;
+  padding: 8px 11px;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: var(--panel); color: var(--text);
+  font: inherit; font-size: 13px;
+}
+
+/* ---- Lời nhắn ---- */
+.task-msg {
+  display: flex; align-items: center; gap: 7px;
+  margin: 0; font-size: 12.5px; font-weight: 600;
+}
+.task-msg svg { flex-shrink: 0; }
+.task-msg.is-ok { color: var(--green); }
+.task-msg.is-bad { color: var(--red); }
+
+.task-empty-note {
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  margin: 0; padding: 22px; text-align: center;
+  color: var(--muted); font-size: 13.5px;
+}
+
+/* ---- Thu nhỏ theo bậc, khớp với các bậc trong styles.css ---- */
+@media (max-width: 1100px), (max-height: 700px) {
+  .task-new { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; padding: 14px; }
+  .task-card { padding: 12px 14px 12px 16px; }
+  .task-card-title { font-size: 14px; }
+}
+
+@media (max-width: 620px) {
+  .task-bar { gap: 10px; padding: 10px 12px; }
+  .task-count { margin-left: 0; }
+  /* Một cột: hai ô cạnh nhau ở bề ngang điện thoại thì mỗi ô còn ~150px, gõ
+     ngày giờ vào đó không nổi. */
+  .task-new { grid-template-columns: 1fr; }
+  .task-new-foot .task-btn-primary { width: 100%; justify-content: center; }
+  .task-meta { gap: 4px 14px; }
+  /* Ô ghi kết quả xuống hàng riêng, để nút "Đánh dấu xong" không bị bóp còn
+     một mẩu bên cạnh nó. */
+  .task-note-input { flex: 1 0 100%; }
+  .task-actions .task-btn { flex: 1 1 auto; justify-content: center; }
+}

@@ -13,4 +13,8 @@ export const EVENTS = {
   DEVICES: 'devices',
   STATUS: 'status',
   ALERT: 'alert',
+  // Tiếng chuông trống: "có ai đó vừa đổi một công việc". KHÔNG kèm nội dung,
+  // vì socket này chưa xác thực nên mọi thứ phát qua đây là phát cho tất cả
+  // trình duyệt đang mở. Nghe được thì tự gọi lại REST bằng token của mình.
+  TASKS: 'tasks-changed',
 };

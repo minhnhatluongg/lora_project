@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PageShell } from '../components/PageShell.jsx';
 import { api } from '../api.js';
 import { socket, EVENTS } from '../socket.js';
@@ -1008,6 +1008,16 @@ export function Settings() {
             </div>
           </section>
         </div>
+
+        {/* ABOUT trước là một ô ở MENU; chỗ đó nay là CÔNG VIỆC. Trang vẫn còn
+            nguyên, chỉ đổi lối vào — bản thiết kế màn HMI và bài báo cáo đều có
+            màn hình này nên bỏ hẳn là lệch. */}
+        <p className="set-about-link">
+          <Link to="/about">
+            <IconInfo size={15} />
+            Thông tin dự án &amp; nhóm thực hiện
+          </Link>
+        </p>
       </div>
 
       {confirming && (

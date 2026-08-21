@@ -16,4 +16,9 @@ export const EVENTS = {
   DEVICES: 'devices',              // device state list changed
   STATUS: 'status',                // system status changed
   ALERT: 'alert',                  // new alert created
+  // Cố ý là một tiếng chuông TRỐNG, không mang nội dung việc. Socket chưa xác
+  // thực (client nối vào không kèm token, server không chia phòng theo người),
+  // nên mọi thứ phát qua đây là phát cho tất cả trình duyệt đang mở. Client
+  // nghe được thì tự gọi lại /api/tasks bằng token của mình.
+  TASKS: 'tasks-changed',          // ai đó vừa tạo/sửa/xóa một công việc
 };

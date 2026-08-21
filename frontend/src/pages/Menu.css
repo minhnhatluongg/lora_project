@@ -81,6 +81,32 @@
   background: var(--menu-tint);
   color: var(--menu-accent);
   line-height: 0;
+  /* Mốc neo cho huy hiệu đếm việc bên dưới. */
+  position: relative;
+}
+
+/* Huy hiệu số việc chưa xong, đậu ở góc trên phải ô biểu tượng.
+   Cố ý mang CON SỐ, không phải chấm đỏ: cùng lý do với ổ khoá "Không đủ quyền"
+   — chỉ đổi màu thì màn hình đơn sắc mất tin, mà "có việc" cũng khác "có bảy
+   việc". Phần đọc cho trình đọc màn hình nằm trong tiêu đề thẻ (Menu.jsx). */
+.menu-card-badge {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--red);
+  border: 2.5px solid var(--panel);   /* viền trắng để tách khỏi nền ô biểu tượng */
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(153, 27, 27, 0.32);
 }
 
 .menu-card-text {
@@ -188,6 +214,10 @@
   .menu-card-icon {
     width: 112px;
     height: 104px;
+  }
+  .menu-card-badge {
+    min-width: 26px; height: 26px; top: -8px; right: -8px;
+    font-size: 12.5px; border-width: 2px;
   }
   .menu-card-icon svg {
     width: 76px;

@@ -11,6 +11,12 @@ fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 export const db = new Database(dbPath);
 db.pragma('journal_mode = WAL'); // better concurrency for frequent IoT writes
 
+// SQLite mặc định TẮT khóa ngoại, nên ON DELETE CASCADE khai trong CREATE TABLE
+// chỉ là chữ nghĩa suông nếu không bật dòng này. `tasks` là bảng duy nhất trong
+// lược đồ có khóa ngoại (v10), nên bật lên không làm hỏng bảng nào sẵn có: xóa
+// một tài khoản sẽ dọn luôn việc đã giao cho họ thay vì để lại việc mồ côi.
+db.pragma('foreign_keys = ON');
+
 db.exec(`
   -- One row per reading of the STM32 node:
   --   * 7 Modbus registers from the RS485 soil probe (T/H/EC/pH/N/P/K)
@@ -306,6 +312,44 @@ if (Number(getMeta('schema_version') || 1) < 9) {
   if (added.length)
     console.log(`[db] migrated: thêm ${added.join(', ')} vào system_status`);
   setMeta('schema_version', 9);
+}
+
+// v10: giao việc giữa người với người. Ba vai trò vốn chỉ dùng để chặn quyền
+// bấm nút; từ đây chúng còn là một trật tự phân việc — admin giao được cho cấp
+// dưới, kĩ thuật giao cho người xem (xem canAssign trong auth.js).
+//
+// Bảng này KHÔNG dính gì tới bảng `alerts`. Cảnh báo là do cảm biến sinh ra, ai
+// đăng nhập cũng thấy như nhau, và cũ đi thì tự trôi. Việc thì có người nhận
+// đích danh, có hạn, và phải nằm đó cho tới khi ai đó đánh dấu xong — gộp chung
+// một bảng là hai vòng đời đánh nhau.
+if (Number(getMeta('schema_version') || 1) < 10) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      title       TEXT NOT NULL,
+      body        TEXT,
+      -- ON DELETE CASCADE cho người nhận: xóa tài khoản thì việc của họ đi theo,
+      -- không để lại việc mồ côi không ai mở được.
+      assignee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      -- Người giao thì ngược lại: giữ việc, chỉ mất tên người giao. Ai đang làm
+      -- dở vẫn phải thấy việc của mình dù người giao đã nghỉ.
+      assigner_id INTEGER          REFERENCES users(id) ON DELETE SET NULL,
+      priority    TEXT NOT NULL DEFAULT 'normal',  -- low | normal | high
+      status      TEXT NOT NULL DEFAULT 'new',     -- new | doing | done
+      due_at      TEXT,                            -- hạn chót; quá hạn thì báo đỏ
+      seen_at     TEXT,                            -- lần đầu người nhận mở ra xem
+      done_at     TEXT,
+      result_note TEXT,                            -- người làm ghi lại khi xong
+      created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    -- Truy vấn nóng nhất là "việc chưa xong của tôi", chạy mỗi lần vẽ huy hiệu đỏ.
+    CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks (assignee_id, status);
+    CREATE INDEX IF NOT EXISTS idx_tasks_assigner ON tasks (assigner_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_due      ON tasks (due_at);
+  `);
+  console.log(`[db] migrated: thêm bảng tasks (giao việc theo vai trò)`);
+  setMeta('schema_version', 10);
 }
 
 // --- Seed default rows if missing -------------------------------------------

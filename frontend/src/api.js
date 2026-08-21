@@ -104,6 +104,22 @@ export const api = {
   // config; users, telemetry and the alert log are left alone.
   restoreDefaults: () => req('/api/system/restore-defaults', { method: 'POST' }),
 
+  // --- công việc ----------------------------------------------------------
+  // Con số cho huy hiệu đỏ. Gọi thường xuyên (lúc mở trang, lúc nghe chuông
+  // socket, lúc quay lại tab) nên cố ý tách khỏi endpoint danh sách: nó chỉ trả
+  // vài số nguyên thay vì kéo về cả trăm dòng.
+  taskSummary: () => req('/api/tasks/summary'),
+  tasks: ({ scope = 'mine', status = 'open' } = {}) =>
+    req(`/api/tasks?scope=${scope}&status=${status}`),
+  // Ai TÔI được phép giao việc. Không dùng /api/users được vì endpoint đó chỉ
+  // dành cho admin, mà kĩ thuật cũng cần chọn người nhận.
+  assignableUsers: () => req('/api/tasks/assignable'),
+  createTask: (data) => req('/api/tasks', { method: 'POST', body: JSON.stringify(data) }),
+  updateTask: (id, patch) =>
+    req(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  markTaskSeen: (id) => req(`/api/tasks/${id}/seen`, { method: 'POST' }),
+  deleteTask: (id) => req(`/api/tasks/${id}`, { method: 'DELETE' }),
+
   // --- users (admin) ------------------------------------------------------
   users: () => req('/api/users'),
   createUser: (data) =>

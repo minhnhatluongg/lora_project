@@ -21,6 +21,7 @@ export const openapiSpec = {
     { name: 'Status', description: 'Trạng thái hệ thống + chế độ + dừng khẩn cấp' },
     { name: 'System', description: 'Khởi động lại / khôi phục cài đặt gốc' },
     { name: 'Alerts', description: 'Cảnh báo' },
+    { name: 'Tasks', description: 'Giao việc theo vai trò (admin > kĩ thuật > người xem)' },
   ],
   components: {
     securitySchemes: {
@@ -341,6 +342,75 @@ export const openapiSpec = {
       },
       delete: {
         tags: ['Users'], summary: 'Xóa user (admin)', security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'OK' } },
+      },
+    },
+    '/api/tasks/summary': {
+      get: {
+        tags: ['Tasks'], summary: 'Số việc chưa xong của tôi (huy hiệu đỏ)', security: [{ bearerAuth: [] }],
+        responses: { 200: { description: '{ open, unseen, overdue, high, assignedOverdue, canAssign }' } },
+      },
+    },
+    '/api/tasks/assignable': {
+      get: {
+        tags: ['Tasks'], summary: 'Những người TÔI được phép giao việc', security: [{ bearerAuth: [] }],
+        responses: { 200: { description: 'Danh sách rỗng nếu vai trò không được giao việc' } },
+      },
+    },
+    '/api/tasks': {
+      get: {
+        tags: ['Tasks'], summary: 'Danh sách việc', security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'scope', in: 'query', schema: { type: 'string', enum: ['mine', 'assigned', 'all'] },
+            description: "'all' chỉ admin; vai khác gọi sẽ tự hạ xuống 'mine'" },
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['open', 'done', 'all'] } },
+        ],
+        responses: { 200: { description: 'OK' } },
+      },
+      post: {
+        tags: ['Tasks'], summary: 'Giao việc (admin / kĩ thuật)', security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object',
+          required: ['title', 'assigneeId'],
+          properties: {
+            title: { type: 'string', maxLength: 200 },
+            body: { type: 'string' },
+            assigneeId: { type: 'integer' },
+            priority: { type: 'string', enum: ['low', 'normal', 'high'] },
+            dueAt: { type: 'string', nullable: true, example: '2026-08-25 17:00' },
+          } } } } },
+        responses: { 201: { description: 'Đã tạo' }, 403: { description: 'Không được giao cho vai trò đó' } },
+      },
+    },
+    '/api/tasks/{id}': {
+      get: {
+        tags: ['Tasks'], summary: 'Một việc', security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'OK' }, 403: { description: 'Không liên quan tới việc này' } },
+      },
+      patch: {
+        tags: ['Tasks'],
+        summary: 'Cập nhật: người nhận đổi tiến độ + ghi kết quả, người giao sửa nội dung',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: {
+          status: { type: 'string', enum: ['new', 'doing', 'done'] },
+          resultNote: { type: 'string' },
+          title: { type: 'string' }, body: { type: 'string' },
+          priority: { type: 'string', enum: ['low', 'normal', 'high'] },
+          dueAt: { type: 'string', nullable: true },
+        } } } } },
+        responses: { 200: { description: 'OK' } },
+      },
+      delete: {
+        tags: ['Tasks'], summary: 'Xóa việc (người giao hoặc admin)', security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'OK' } },
+      },
+    },
+    '/api/tasks/{id}/seen': {
+      post: {
+        tags: ['Tasks'], summary: 'Người nhận đã mở xem (tắt chấm "mới")', security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: { 200: { description: 'OK' } },
       },

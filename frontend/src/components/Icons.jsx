@@ -429,3 +429,30 @@ export const TANK_ICON = {
     </Svg>
   ),
 };
+
+// --- Công việc ---------------------------------------------------------------
+// Bảng kẹp có kẹp giấy phía trên và hai dòng gạch: đọc ra "danh sách việc" ngay
+// ở cỡ 22px của huy hiệu, khác hẳn IconInfo (hình tròn) mà nó thay chỗ ở MENU.
+export const IconTasks = (p) => (
+  <Svg {...p}>
+    <path d="M9 4.6h6a1 1 0 0 1 1 1v1.2H8V5.6a1 1 0 0 1 1-1Z" />
+    <path d="M16 6.4h1.8a2 2 0 0 1 2 2v10.4a2 2 0 0 1-2 2H6.2a2 2 0 0 1-2-2V8.4a2 2 0 0 1 2-2H8" />
+    <path d="M8.4 12.2h7.2M8.4 16h4.6" />
+  </Svg>
+);
+
+// Dùng cho việc đã xong và cho nút "đánh dấu xong".
+export const IconCheck = (p) => (
+  <Svg {...p}>
+    <path d="M5 12.6l4.4 4.4L19 7.4" strokeWidth="2.1" />
+  </Svg>
+);
+
+// Chuông báo việc quá hạn. Cố ý KHÔNG dùng riêng màu đỏ để báo trạng thái —
+// luôn đi kèm chữ, theo đúng cách các thẻ ở MENU làm với ổ khoá "Không đủ quyền".
+export const IconBell = (p) => (
+  <Svg {...p}>
+    <path d="M12 4.2a5.2 5.2 0 0 0-5.2 5.2c0 4-1.6 5.2-1.6 5.2h13.6s-1.6-1.2-1.6-5.2A5.2 5.2 0 0 0 12 4.2Z" />
+    <path d="M10.4 17.6a1.8 1.8 0 0 0 3.2 0" />
+  </Svg>
+);

@@ -44,3 +44,20 @@ export function requireRole(...allowed) {
 export const canControl = requireRole('admin', 'technician');
 export const canConfig = requireRole('admin', 'technician');
 export const adminOnly = requireRole('admin');
+
+// --- Trật tự phân việc -------------------------------------------------------
+// Ba vai trò trước nay chỉ dùng để chặn quyền bấm nút; với bảng `tasks` chúng
+// còn là một trật tự trên dưới: giao được việc cho bất kỳ ai xếp THẤP HƠN mình.
+// Admin giao cho kĩ thuật và người xem, kĩ thuật giao cho người xem, người xem
+// không giao cho ai.
+//
+// So sánh bằng thứ hạng chứ không liệt kê từng cặp: thêm một vai trò sau này
+// chỉ cần thêm một dòng ở đây, không phải đi sửa mọi chỗ kiểm tra.
+export const ROLE_RANK = { admin: 3, technician: 2, viewer: 1 };
+
+export const canAssignTo = (actorRole, targetRole) =>
+  (ROLE_RANK[actorRole] || 0) > (ROLE_RANK[targetRole] || 0);
+
+// Vai trò có thể được giao việc cho người khác — dùng để ẩn/hiện nút "Giao
+// việc". Luật thật vẫn là canAssignTo ở trên, kiểm lại lần nữa lúc ghi.
+export const canAssignAtAll = (role) => (ROLE_RANK[role] || 0) > 1;
