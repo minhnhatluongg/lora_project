@@ -17,6 +17,10 @@ const PRIORITIES = [
 
 // 'new' viết là "Chưa bắt đầu" chứ không phải "Mới": nó nói về TIẾN ĐỘ, và
 // "Mới" dễ bị đọc nhầm thành "vừa được giao" — hai chuyện khác nhau.
+// Chữ trên chip mức ưu tiên. Không có mục 'normal': mức bình thường là mặc
+// định nên không đeo chip, xem chú thích ở chỗ vẽ chip.
+const PRIORITY_FLAG = { high: 'Ưu tiên cao', low: 'Ưu tiên thấp' };
+
 const STATUS_LABEL = { new: 'Chưa bắt đầu', doing: 'Đang làm', done: 'Xong' };
 
 // Ba khung nhìn. `assigned` và `all` chỉ hiện với vai được phép — nhưng server
@@ -212,8 +216,16 @@ function TaskCard({ task, me, onChanged }) {
               người thật sự bắt tay vào việc. `seenAt` thì tắt ngay lúc mở trang
               nên làm cờ báo là vô dụng — nó được dùng đúng chỗ của nó, ở khung
               "Tôi đã giao", nơi người giao cần biết cấp dưới đã ngó tới chưa. */}
-          {task.priority === 'high' && task.status !== 'done' && (
-            <span className="task-flag task-flag-high">Ưu tiên cao</span>
+          {/* Mức ưu tiên KHÁC bình thường thì luôn kèm chữ. Trước đây chỉ mức
+              "cao" có chip, nên "thấp" và "bình thường" chỉ khác nhau ở màu
+              vạch bên trái — tức là phân biệt bằng riêng màu sắc, đúng thứ mà
+              ổ khoá "Không đủ quyền" ở MENU đã cẩn thận tránh. Mức bình thường
+              cố ý KHÔNG có chip: nó là mặc định, và một cái chip lặp trên mọi
+              thẻ thì chẳng ai còn đọc nữa. */}
+          {task.priority !== 'normal' && task.status !== 'done' && (
+            <span className={`task-flag task-flag-${task.priority}`}>
+              {PRIORITY_FLAG[task.priority]}
+            </span>
           )}
           {/* Kèm CHỮ chứ không chỉ đổi màu: cùng quy ước với ổ khoá "Không đủ
               quyền" ở MENU, để còn đọc được trên màn hình đơn sắc. */}

@@ -112,11 +112,19 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
-/* Mức ưu tiên nhận ra bằng vạch màu bên trái, NHƯNG mức cao còn có nhãn chữ
-   "Ưu tiên cao" ở đầu thẻ — vạch màu một mình không phải là thông tin. */
-.task-p-high { --task-accent: #f97316; }
-.task-p-normal { --task-accent: #93b4f0; }
-.task-p-low { --task-accent: #cbd5e1; }
+/* Vạch màu bên trái là thứ nhìn thấy trước tiên khi lướt danh sách, nhưng nó
+   KHÔNG BAO GIỜ là nơi duy nhất chứa tin: mọi mức khác "bình thường" đều đeo
+   thêm một chip có chữ ở đầu thẻ.
+
+   Bình thường cố ý mang màu trung tính — nó là mặc định, không phải một tín
+   hiệu. Nhờ vậy chỉ những thẻ THẬT SỰ cần để mắt mới có màu, thay vì cả danh
+   sách nhuộm đủ sắc rồi chẳng cái nào nổi lên. */
+.task-p-high { --task-accent: #ea580c; }
+.task-p-normal { --task-accent: #cbd5e1; }
+.task-p-low { --task-accent: #64748b; }
+
+/* Quá hạn ĐÈ lên màu mức ưu tiên — hạn chót gấp hơn thứ tự ưu tiên. Không mất
+   tin gì: mức ưu tiên vẫn nằm trên chip riêng của nó ngay cạnh chip "Quá hạn". */
 .task-card.is-overdue { --task-accent: var(--red); background: #fffbfb; }
 .task-card.is-done { --task-accent: #86efac; opacity: 0.78; }
 .task-card.is-done .task-card-title { text-decoration: line-through; text-decoration-color: #94a3b8; }
@@ -136,6 +144,7 @@
   border: 1px solid var(--border);
 }
 .task-flag-high { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
+.task-flag-low { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
 .task-flag-overdue { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
 /* "Chưa bắt đầu" là trạng thái cần người ta để mắt tới nên đậm hơn hai trạng
    thái kia — nhưng vẫn có CHỮ, màu chỉ là lớp nhấn thêm. */
