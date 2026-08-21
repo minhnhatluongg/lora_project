@@ -25,7 +25,12 @@ export const config = {
   commandHistoryDays: Number(process.env.COMMAND_HISTORY_DAYS) || 7,
 
   // Housekeeping. Set TELEMETRY_RETENTION_DAYS=0 to keep everything forever.
-  telemetryRetentionDays: Number(process.env.TELEMETRY_RETENTION_DAYS ?? 90),
+  //
+  // 7 days, not 90. The ESP32 posts every 3 seconds once it is wired to a real
+  // probe -- 28,800 rows a day, so 90 days is 2.6 million rows of a reading
+  // nobody looks back at. Seven matches the longest range the charts offer
+  // ("7 ngày" in RealtimeCharts), so nothing the UI can ask for is missing.
+  telemetryRetentionDays: Number(process.env.TELEMETRY_RETENTION_DAYS ?? 7),
   alertRetentionDays: Number(process.env.ALERT_RETENTION_DAYS ?? 30),
   // Every sensor the HMI shows is a MIN/MAX pair — the panel's "CÀI ĐẶT NGƯỠNG"
   // screen edits both halves. A blank/null bound means "no limit on that side".

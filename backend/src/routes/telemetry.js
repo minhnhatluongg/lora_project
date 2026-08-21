@@ -129,20 +129,49 @@ telemetryRouter.get(
 );
 
 // History for charts. ?hours=24 (default) and optional ?limit.
+//
+// `limit` là SỐ ĐIỂM VẼ trải đều khung thời gian, không phải "lấy bấy nhiêu
+// dòng đầu tiên". Khác biệt này không phải chuyện thẩm mỹ:
+//
+// Bản trước viết `ORDER BY created_at ASC LIMIT 500`, tức là 500 dòng CŨ NHẤT
+// trong khung. ESP32 đẩy số lên mỗi 3 giây, nên 500 dòng chỉ là 25 phút — biểu
+// đồ "24 giờ" sẽ vẽ đúng 25 phút của hôm qua rồi đứng im, còn số mới nhất không
+// bao giờ lọt vào. Lỗi này ẩn suốt thời gian dữ liệu còn thưa (dưới 500 dòng
+// một ngày thì LIMIT không cắt gì cả) và chỉ lộ ra khi cắm phần cứng thật.
+//
+// Cách sửa: cắt khung thành `limit` ô thời gian rồi lấy MỘT lần đo trong mỗi ô.
+// Lấy bản ghi CUỐI mỗi ô (MAX(id)) chứ không lấy trung bình: trung bình sinh ra
+// những con số chưa từng đo được, mà mỗi dòng ở đây còn được `withLevels` tô màu
+// theo ngưỡng — một giá trị bịa có thể che mất lần chạm ngưỡng thật.
 telemetryRouter.get(
   '/history',
   requireAuth,
   asyncH((req, res) => {
-    const hours = Number(req.query.hours) || 24;
-    const limit = Math.min(Number(req.query.limit) || 500, 5000);
+    // Chặn trên 8760 giờ (1 năm): quá số này thì `datetime('now', ?)` vẫn chạy
+    // nhưng chẳng còn dữ liệu nào, chỉ tốn một lần quét bảng.
+    const hours = Math.min(Math.max(Number(req.query.hours) || 24, 1), 8760);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 500, 2), 5000);
+    const bucketSeconds = Math.max(1, Math.ceil((hours * 3600) / limit));
+
     const rows = db
       .prepare(
-        `SELECT * FROM telemetry
-         WHERE created_at >= datetime('now', ?)
-         ORDER BY created_at ASC
-         LIMIT ?`
+        `WITH win AS (
+           SELECT * FROM telemetry WHERE created_at >= datetime('now', ?)
+         )
+         SELECT * FROM win
+          WHERE id IN (
+            SELECT MAX(id) FROM win
+             -- CAST(? AS INTEGER) không thừa. Số JS gắn vào truy vấn là số
+             -- THỰC, mà INTEGER / REAL trong SQLite là phép chia thực — mỗi
+             -- dòng rơi vào một ô riêng và cả phép gộp thành vô nghĩa (đo được:
+             -- 28.794 điểm thay vì 500). Ép về số nguyên mới ra phép chia lấy
+             -- nguyên, tức là chia ô thật.
+             GROUP BY CAST(strftime('%s', created_at) AS INTEGER) / CAST(? AS INTEGER)
+          )
+          ORDER BY created_at ASC`
       )
-      .all(`-${hours} hours`, limit);
+      .all(`-${hours} hours`, bucketSeconds);
+
     res.json(withLevelsAll(rows));
   })
 );
