@@ -69,7 +69,8 @@ commandsRouter.post(
     // The ack is ground truth from the hardware, so apply it even if this
     // command was superseded while in flight — a newer one will follow.
     if (cmd.device_id === 'mode') {
-      setMode(cmd.action); // 'AUTO' | 'MANUAL'
+      // Cái ack này ĐẾN TỪ phần cứng — nó chính là xác nhận, nên đánh dấu vào.
+      setMode(cmd.action, { confirmed: true }); // 'AUTO' | 'MANUAL' | 'NONE'
     } else {
       setDeviceState(cmd.device_id, cmd.action === 'ON');
     }

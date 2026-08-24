@@ -55,6 +55,10 @@ export function getStatus() {
     now - masterSeen < config.masterTimeoutSeconds * 1000;
   return {
     mode: row.mode,
+    // Chế độ trên đã được PHẦN CỨNG xác nhận chưa, hay mới chỉ là điều web yêu
+    // cầu. Xem setMode().
+    modeConfirmed: Boolean(row.mode_confirmed_at),
+    modeConfirmedAt: row.mode_confirmed_at || null,
     masterOnline,
     slaveOnline: !!row.slave_online,
     loraRssi: row.lora_rssi,
@@ -127,6 +131,10 @@ export function reportFromMaster({ mode, autoState, mixState, mixReady } = {}) {
   }
   if (!sets.length) return getStatus();
 
+  // Master báo về chế độ nào thì chính nó là bằng chứng: đánh dấu đã xác nhận.
+  if (mode === 'AUTO' || mode === 'MANUAL' || mode === 'NONE') {
+    sets.push(`mode_confirmed_at = datetime('now')`);
+  }
   sets.push(`engine_seen_at = datetime('now')`);
   db.prepare(`UPDATE system_status SET ${sets.join(', ')} WHERE id = 1`).run(...params);
 
@@ -142,8 +150,20 @@ export function reportFromMaster({ mode, autoState, mixState, mixReady } = {}) {
   return status;
 }
 
-export function setMode(mode) {
-  db.prepare(`UPDATE system_status SET mode = ? WHERE id = 1`).run(mode);
+// `confirmed` phân biệt AI nói ra chế độ này.
+//
+//   false — web vừa yêu cầu. Lệnh mới nằm vào hàng đợi, ngoài đồng chưa ai biết.
+//   true  — phần cứng đã xác nhận: ESP32 báo về, hoặc nó vừa ack lệnh đổi chế độ.
+//
+// Không tách hai chuyện này thì màn CONTROL vẽ nút TỰ ĐỘNG chọn chắc nịch ngay
+// cả khi ESP32 chưa từng kết nối lần nào — người xem đọc ra "hệ đang chạy tự
+// động" trong khi sự thật là "web đã xin, chưa ai nghe".
+export function setMode(mode, { confirmed = false } = {}) {
+  db.prepare(
+    `UPDATE system_status
+        SET mode = ?, mode_confirmed_at = ${confirmed ? `datetime('now')` : 'NULL'}
+      WHERE id = 1`
+  ).run(mode);
   emit(EVENTS.STATUS, getStatus());
 }
 

@@ -49,20 +49,25 @@ function Panel({ icon, title, children, footer, grow = false }) {
   );
 }
 
-function ModeTile({ id, label, glyph, selected, busy, disabled, onSelect }) {
+// `pending` = chế độ này ĐÃ ĐƯỢC CHỌN nhưng phần cứng chưa xác nhận. Vẽ khác
+// hẳn trạng thái đã xác nhận, vì hai điều đó khác nhau thật: một cái là "hệ
+// đang chạy như vậy", cái kia mới là "đã yêu cầu, còn chờ ngoài đồng nghe thấy".
+// Kèm CHỮ chứ không chỉ đổi nét viền — cùng quy ước với ổ khoá ở MENU.
+function ModeTile({ id, label, glyph, selected, pending, busy, disabled, onSelect }) {
   return (
     <button
       type="button"
       role="radio"
       aria-checked={selected}
       aria-busy={busy || undefined}
-      className={`ctrl-mode${selected ? ' is-on' : ''}${busy ? ' is-busy' : ''}`}
+      className={`ctrl-mode${selected ? ' is-on' : ''}${pending ? ' is-pending' : ''}${busy ? ' is-busy' : ''}`}
       disabled={disabled || busy}
       onClick={() => onSelect(id)}
     >
       <span className="ctrl-mode-radio" aria-hidden="true" />
       <span className="ctrl-mode-glyph">{glyph}</span>
       <span className="ctrl-mode-label">{label}</span>
+      {pending && <span className="ctrl-mode-pending">chờ xác nhận</span>}
     </button>
   );
 }
@@ -296,6 +301,9 @@ export function Control() {
   }, [armed]);
 
   const mode = String(status?.mode || '').toUpperCase();
+  // Đã chọn một chế độ nhưng chưa có phần cứng nào xác nhận. Chỉ có nghĩa khi
+  // thật sự đã chọn — chưa chọn gì thì không có gì để chờ.
+  const modeUnconfirmed = mode !== '' && mode !== 'NONE' && !status?.modeConfirmed;
   const estopEngaged = !!(status?.eStop ?? status?.estop);
   const estopSupported = typeof api.emergencyStop === 'function';
 
@@ -397,6 +405,8 @@ export function Control() {
   const selectMode = useCallback(
     async (next) => {
       if (readOnly || modeBusy || next === mode) return;
+      // 'NONE' tắt hết bơm van rồi khoá bảng — hỏi lại một câu trước khi làm.
+      if (next === 'NONE' && !window.confirm('Bỏ chọn chế độ sẽ TẮT toàn bộ bơm và van, rồi khoá bảng điều khiển. Tiếp tục?')) return;
       setModeBusy(next);
       setModeError(null);
       try {
@@ -516,6 +526,13 @@ export function Control() {
     ? modeError
     : estopEngaged
       ? 'Không thể bật TỰ ĐỘNG cho tới khi giải trừ dừng khẩn cấp.'
+      // Ưu tiên hơn cả câu mô tả chế độ: nói "ESP32 đang tự điều khiển" trong
+      // khi ESP32 chưa từng kết nối là khẳng định sai về thứ đang chạy ngoài
+      // đồng, và đó đúng là chỗ đã làm người xem hiểu nhầm.
+      : modeUnconfirmed
+        ? status?.masterSeenAt
+          ? `Đã yêu cầu ${mode === 'AUTO' ? 'TỰ ĐỘNG' : 'THỦ CÔNG'} — đang chờ ESP32 nhận lệnh. Chế độ ngoài đồng chưa chắc đã đổi.`
+          : `Đã yêu cầu ${mode === 'AUTO' ? 'TỰ ĐỘNG' : 'THỦ CÔNG'}, nhưng ESP32 CHƯA TỪNG kết nối tới máy chủ này. Lệnh vẫn đang nằm trong hàng đợi.`
       : mode === 'AUTO'
         ? 'ESP32 dưới ruộng đang tự điều khiển. Dải bên dưới cho biết đang ở bước nào.'
         : mode === 'MANUAL'
@@ -584,6 +601,7 @@ export function Control() {
                 label="Thủ công"
                 glyph={<IconSliders />}
                 selected={mode === 'MANUAL'}
+                pending={mode === 'MANUAL' && modeUnconfirmed}
                 busy={modeBusy === 'MANUAL'}
                 disabled={readOnly}
                 onSelect={selectMode}
@@ -593,6 +611,7 @@ export function Control() {
                 label="Tự động"
                 glyph={<IconAuto />}
                 selected={mode === 'AUTO'}
+                pending={mode === 'AUTO' && modeUnconfirmed}
                 busy={modeBusy === 'AUTO'}
                 /* the server refuses AUTO while the latch is engaged (409), so
                    don't offer a press that can only fail */
@@ -601,6 +620,20 @@ export function Control() {
               />
             </div>
             <p className={`ctrl-note${modeError ? ' is-bad' : ''}`}>{modeNote}</p>
+
+            {/* Chỉ hiện khi ĐÃ chọn một chế độ. Trước đây chọn rồi là không có
+                đường quay lại trạng thái khoá — giao diện chỉ có hai nút và cả
+                hai đều là "đang cầm lái". */}
+            {mode !== '' && mode !== 'NONE' && !readOnly && (
+              <button
+                type="button"
+                className="ctrl-mode-clear"
+                disabled={Boolean(modeBusy)}
+                onClick={() => selectMode('NONE')}
+              >
+                Bỏ chọn chế độ (tắt hết)
+              </button>
+            )}
 
             {/* Ở TỰ ĐỘNG, chín công tắc đều khoá — không có dải này thì màn hình
                 không nói được hệ thống đang làm gì, mà đó lại là câu hỏi đầu

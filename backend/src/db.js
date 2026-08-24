@@ -374,6 +374,26 @@ if (Number(getMeta('schema_version') || 1) < 11) {
   setMeta('schema_version', 11);
 }
 
+// v12: phân biệt "web đã yêu cầu" với "phần cứng đã xác nhận".
+//
+// Cột `mode` xưa nay gộp hai chuyện làm một. Bấm TỰ ĐỘNG trên web là nó đổi
+// ngay, rồi màn CONTROL vẽ nút TỰ ĐỘNG chọn chắc nịch — kể cả khi ESP32 chưa
+// từng kết nối lần nào và cái lệnh đó vẫn nằm nguyên trong hàng đợi. Người mở
+// trang lên đọc ra "hệ thống đang chạy tự động", trong khi sự thật là "web đã
+// xin chạy tự động, ngoài đồng chưa ai nghe".
+//
+// NULL = chưa có xác nhận nào cho giá trị `mode` hiện tại.
+if (Number(getMeta('schema_version') || 1) < 12) {
+  const has = db
+    .prepare(`SELECT 1 FROM pragma_table_info('system_status') WHERE name = 'mode_confirmed_at'`)
+    .get();
+  if (!has) {
+    db.prepare(`ALTER TABLE system_status ADD COLUMN mode_confirmed_at TEXT`).run();
+    console.log(`[db] migrated: thêm cột system_status.mode_confirmed_at (chế độ đã được phần cứng xác nhận chưa)`);
+  }
+  setMeta('schema_version', 12);
+}
+
 // --- Seed default rows if missing -------------------------------------------
 // Five pumps and four valves, matching the relay board on the panel drawing.
 const defaultDevices = [

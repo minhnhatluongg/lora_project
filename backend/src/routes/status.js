@@ -42,8 +42,12 @@ statusRouter.post(
   canControl,
   asyncH((req, res) => {
     const mode = String(req.body?.mode || '').toUpperCase();
-    if (!['AUTO', 'MANUAL'].includes(mode))
-      return res.status(400).json({ error: "mode must be 'AUTO' or 'MANUAL'" });
+    // 'NONE' = bỏ chọn, khoá toàn bộ đầu ra — trạng thái mà một tủ mới dựng lên
+    // vẫn ở. Trước đây chỉ nhận AUTO/MANUAL, nên chọn một lần là KHÔNG BAO GIỜ
+    // quay lại được trạng thái khoá: muốn bàn giao tủ ở thế an toàn, hoặc dọn
+    // sau một buổi demo, đều không có đường.
+    if (!['AUTO', 'MANUAL', 'NONE'].includes(mode))
+      return res.status(400).json({ error: "mode must be 'AUTO', 'MANUAL' or 'NONE'" });
 
     // Going back to AUTO while the emergency stop is latched would show the
     // operator "TỰ ĐỘNG" on a system whose automation engine is inert. Refuse
@@ -62,8 +66,15 @@ statusRouter.post(
     // starting the nutrient pumps before anything had been mixed was wrong on
     // its own terms. Switching the whole panel on is now a separate, explicit
     // commissioning action — see POST /api/status/test-panel.
+    // Bỏ chọn cũng phải TẮT HẾT, không chỉ khoá giao diện: 'NONE' nghĩa là
+    // không ai đang cầm lái, mà bỏ mặc một cái bơm đang chạy trong trạng thái
+    // đó thì tệ hơn hẳn so với để nguyên chế độ cũ.
+    if (mode === 'NONE') enqueueAllDevices('OFF', { staggerSeconds: PANEL_STAGGER_SECONDS });
+
     enqueueCommand('mode', mode);
-    setMode(mode);
+    // confirmed: false — mới chỉ là điều web YÊU CẦU. Chỉ khi ESP32 ack lệnh
+    // vừa xếp hàng ở trên, hoặc tự báo về, thì mới tính là đã xác nhận.
+    setMode(mode, { confirmed: false });
     res.json(getStatus());
   })
 );

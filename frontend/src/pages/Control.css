@@ -185,6 +185,54 @@
 .ctrl-mode:disabled .ctrl-mode-glyph { color: #5b667f; }
 .ctrl-mode:disabled .ctrl-mode-radio { border-color: #9aa6bd; }
 
+/* Đã chọn nhưng phần cứng CHƯA xác nhận. Cố ý khác hẳn `is-on`: viền đứt, nền
+   ngả vàng chờ đợi thay vì xanh khẳng định. Trạng thái này còn mang nhãn chữ
+   "chờ xác nhận" ngay trong ô — nét viền một mình không phải là thông tin. */
+.ctrl-mode.is-pending {
+  border-style: dashed;
+  border-color: var(--amber);
+  background: #fffdf6;
+  box-shadow: none;
+}
+.ctrl-mode.is-pending .ctrl-mode-glyph { color: var(--amber); }
+.ctrl-mode.is-pending .ctrl-mode-radio { border-color: var(--amber); }
+.ctrl-mode.is-pending .ctrl-mode-radio::after { background: var(--amber); }
+
+.ctrl-mode-pending {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+/* Đường quay lại trạng thái khoá. Cố ý nhạt và đứng riêng dưới ghi chú — nó
+   tắt toàn bộ bơm van, nên không được nằm ngang hàng với hai nút chọn chế độ
+   như một lựa chọn thứ ba ngang giá. */
+.ctrl-mode-clear {
+  /* Neo phải và nhỏ. Đây là hành động PHỤ — để nó thành một khối chiếm trọn bề
+     ngang thì nó đứng ngang hàng với hai ô chọn chế độ như một lựa chọn thứ ba,
+     mà nó không phải vậy. Gọn lại còn tiết kiệm 18px chiều cao trên bảng cảm
+     ứng 1024x600, nơi từng điểm ảnh dọc đều phải trả giá. */
+  display: block;
+  margin: 8px 0 0 auto;
+  padding: 4px 10px;
+  border: 1px dashed var(--ctrl-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ctrl-mode-clear:hover:not(:disabled) { border-color: #fca5a5; color: var(--red); background: #fff7f7; }
+.ctrl-mode-clear:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .ctrl-mode.is-busy { border-color: var(--blue); animation: ctrl-busy 1s ease-in-out infinite; }
 
 @keyframes ctrl-busy {
