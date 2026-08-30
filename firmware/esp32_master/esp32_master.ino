@@ -44,6 +44,10 @@ SemaphoreHandle_t systemMutex = NULL;
 SemaphoreHandle_t queueMutex = NULL;
 
 volatile bool telemetryPending = false, settingsPending = false, deviceStatePending = false, wifiUIUpdatePending = false;
+// Co bao cho webTask day tien trinh AUTO/TRON len web. Dat = true o MOI lan
+// chuyen trang thai cua hai may trang thai ben duoi; thieu no thi dai tien trinh
+// tren trang CONTROL khong bao gio co du lieu.
+volatile bool statusReportPending = false;
 bool lastWiFiState = false; 
 int webCommandId = -1, webAckId = -1;
 volatile bool webAckPending = false; 
@@ -253,6 +257,11 @@ void enqueueEmergencyStop() {
   loraSerial.println(EMERGENCY_COMMAND); delay(50); loraSerial.println(EMERGENCY_COMMAND);
   updateOLED("EMERGENCY STOP", "Ngat toan he thong"); 
   if (currentPage == 3) updateNextionControlStates();
+
+  // Day trang thai TAT cua toan bo bom/van len web NGAY, khong doi nhip 5 giay:
+  // dung khan cap ma trang web con ve cong tac mau xanh them vai giay la sai.
+  deviceStatePending = true;
+  statusReportPending = true;
 }
 
 void setWebAckResult(int id, bool success) {
@@ -346,11 +355,13 @@ void handleAutoMixingLogic() {
     case MIX_START_PUMP3:
       if (Dist4 > 0 && Dist4 <= WATER_FULL_DIST) {
         mixState = MIX_START_DOSING; 
+        statusReportPending = true;
         showAutoStep("TRON PHAN: B2", "Bon da day nuoc", "Chuyen cham phan...", "");
       } else {
         enqueueCommand("<B:ON3>"); 
         mixStateTimer = now; 
         mixState = MIX_PUMPING_WATER; 
+        statusReportPending = true;
         showAutoStep("TRON PHAN: B1", "Dang cap nuoc...", "Muc: " + String(Dist4, 1) + "cm", "Cho day bon (<20cm)");
       }
       break;
@@ -370,6 +381,7 @@ void handleAutoMixingLogic() {
       enqueueCommand("<B:ON5>"); 
       mixStateTimer = now; 
       mixState = MIX_WAIT_STABLE; 
+      statusReportPending = true;
       showAutoStep("TRON PHAN: B2", "Khuay on dinh nuoc", "EC: " + String(EC_Value, 2), "Thoi gian: 20s");
       break;
 
@@ -379,6 +391,7 @@ void handleAutoMixingLogic() {
         enqueueCommand("<B:OFF5>"); 
         if (EC_Value < ecMin) { 
           mixState = MIX_START_DOSING; 
+          statusReportPending = true;
         } 
         else if (EC_Value > ecMax) { 
           mixState = MIX_START_PUMP3; 
@@ -387,6 +400,7 @@ void handleAutoMixingLogic() {
         else { 
           isMixingReady = true; 
           mixState = MIX_IDLE; 
+          statusReportPending = true;
           showAutoStep("TRON PHAN: XONG", "EC dat chuan on dinh", "San sang tuoi", "");
         }
       } else if (autoOLEDShouldTick()) {
@@ -402,6 +416,7 @@ void handleAutoMixingLogic() {
       enqueueCommand("<B:ON5>"); 
       mixStateTimer = now; 
       mixState = MIX_DOSING_NUTRIENT; 
+      statusReportPending = true;
       showAutoStep("TRON PHAN: B3", "Cham phan + Khuay", "EC: " + String(EC_Value, 2), "Thoi gian: 3s");
       break;
 
@@ -409,6 +424,7 @@ void handleAutoMixingLogic() {
       unsigned long elapsed = now - mixStateTimer;
       if (elapsed >= 3000UL) { 
         mixState = MIX_STOP_DOSING; 
+        statusReportPending = true;
       } else if (autoOLEDShouldTick()) {
         unsigned long remainSec = (3000UL - elapsed) / 1000UL;
         updateOLED4("TRON PHAN: B3", "Cham phan + Khuay", "EC: " + String(EC_Value, 2), "Con lai: " + String(remainSec) + "s");
@@ -421,6 +437,7 @@ void handleAutoMixingLogic() {
       enqueueCommand("<B:OFF2>"); 
       mixStateTimer = now; 
       mixState = MIX_WAIT_STABLE; 
+      statusReportPending = true;
       showAutoStep("TRON PHAN: B4", "Khuay hoa tan phan", "EC: " + String(EC_Value, 2), "Thoi gian: 20s");
       break;
   }
@@ -431,6 +448,21 @@ void handleAutoMixingLogic() {
 // ================================================================
 void handleAutoIrrigationLogic() {
   if (systemMode != 1) return; 
+
+  // KHOA CHEO AN TOAN — mua to thi cat ngang, khong doi tuoi xong chu ky.
+  // Kiem o DAU ham chu khong chi luc bat dau: troi do mua giua chung ma van tuoi
+  // tiep thi vua phi nuoc vua ung goc. Phan can nuoc bon tron da duoc kiem rieng
+  // trong AUTO_IDLE va AUTO_IRRIGATING nen o day chi lo chuyen mua.
+  if (RainPercent >= RAIN_MAX_PERCENT) {
+    if (autoState != AUTO_IDLE) {
+      enqueueCommand("<B:OFF4>");                                   // bom tuoi
+      enqueueCommand("<B:OFF" + String(6 + currentValveIdx) + ">"); // van dang mo
+      autoState = AUTO_IDLE;
+      statusReportPending = true;
+      showAutoStep("KHOA AN TOAN", "Troi dang mua to!", "Da ngat bom va van", "Cho tanh mua...");
+    }
+    return;
+  }
 
   unsigned long now = millis();
   switch (autoState) {
@@ -443,6 +475,7 @@ void handleAutoIrrigationLogic() {
         }
         currentValveIdx = 0; 
         autoState = AUTO_OPEN_VALVE; 
+        statusReportPending = true;
       } 
       break;
 
@@ -451,6 +484,7 @@ void handleAutoIrrigationLogic() {
       if (currentValveIdx == 0) enqueueCommand("<B:ON4>"); 
       autoStateTimer = now; 
       autoState = AUTO_IRRIGATING; 
+      statusReportPending = true;
       showAutoStep("TUOI CAY: AUTO", "Tuoi Van " + String(currentValveIdx + 1), "Am do: " + String(Humidity, 1) + "%", "Thoi gian: " + String(timeBom) + "p");
       break;
 
@@ -462,6 +496,7 @@ void handleAutoIrrigationLogic() {
         enqueueCommand("<B:OFF4>");
         enqueueCommand("<B:OFF" + String(6 + currentValveIdx) + ">");
         autoState = AUTO_IDLE;
+        statusReportPending = true;
         isMixingReady = false;
         showAutoStep("BAO DONG", "Can nuoc khi tuoi!", "Da ngat he thong", "");
         break;
@@ -469,6 +504,7 @@ void handleAutoIrrigationLogic() {
 
       if (elapsed >= maxMs) { 
         autoState = AUTO_WAIT_RESTING_CMD; 
+        statusReportPending = true;
       } else if (autoOLEDShouldTick()) {
         unsigned long remainSec = (maxMs - elapsed) / 1000UL;
         updateOLED4("TUOI CAY: AUTO", "Dang tuoi Van " + String(currentValveIdx + 1), "Am do: " + String(Humidity, 1) + "%", "Con lai: " + String(remainSec) + "s");
@@ -483,6 +519,7 @@ void handleAutoIrrigationLogic() {
           enqueueCommand("<B:ON" + String(6 + currentValveIdx) + ">"); 
           autoStateTimer = now;
           autoState = AUTO_WAIT_VALVE_OFF;
+          statusReportPending = true;
           showAutoStep("TUOI CAY: AUTO", "Chuyen Van " + String(currentValveIdx + 1), "Dang chong soc ap...", "");
       } 
       else { 
@@ -491,11 +528,13 @@ void handleAutoIrrigationLogic() {
           
           if (Humidity < humMax) { 
               autoState = AUTO_RESTING;
+              statusReportPending = true;
               autoStateTimer = now; 
               showAutoStep("TUOI CAY: AUTO", "Da tuoi xong 4 van", "Dang nghi ngoi...", "Thoi gian: " + String(timeNghi) + "p"); 
           } 
           else { 
               autoState = AUTO_IDLE; 
+              statusReportPending = true;
               isMixingReady = false; 
               showAutoStep("TUOI CAY: XONG", "Am do dat chuan", "Hoan thanh chu ky", ""); 
           } 
@@ -508,6 +547,7 @@ void handleAutoIrrigationLogic() {
          enqueueCommand("<B:OFF" + String(6 + currentValveIdx - 1) + ">"); 
          autoStateTimer = now; 
          autoState = AUTO_IRRIGATING; 
+         statusReportPending = true;
       }
       break;
     }
@@ -517,6 +557,7 @@ void handleAutoIrrigationLogic() {
       unsigned long elapsed = now - autoStateTimer;
       if (elapsed >= maxMs) { 
         autoState = AUTO_IDLE; 
+        statusReportPending = true;
       } else if (autoOLEDShouldTick()) {
         unsigned long remainSec = (maxMs - elapsed) / 1000UL;
         updateOLED4("TUOI CAY: AUTO", "Dang nghi ngoi...", "Am do: " + String(Humidity, 1) + "%", "Con lai: " + String(remainSec) + "s");
@@ -526,6 +567,7 @@ void handleAutoIrrigationLogic() {
       
     default:
       autoState = AUTO_IDLE;
+      statusReportPending = true;
       break;
   }
 }
@@ -573,6 +615,29 @@ void pushDeviceStateToWeb() {
   if (beginRequest(http, "/api/devices/state")) { http.addHeader("Content-Type", "application/json"); http.POST(body); http.end(); }
 }
 
+// Bao cho web biet may trang thai duoi ruong dang o buoc nao. Day la nguon duy
+// nhat cua autoState/mixState tren trang CONTROL — va cung la duong DUY NHAT de
+// mot lan doi che do tren man Nextion di nguoc len duoc web.
+void pushStatusReportToWeb() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  DynamicJsonDocument doc(512);
+
+  xSemaphoreTake(systemMutex, portMAX_DELAY);
+  doc["mode"] = (systemMode == 1) ? "AUTO" : "MANUAL";
+  doc["autoState"] = (int)autoState;
+  doc["mixState"] = (int)mixState;
+  doc["mixReady"] = isMixingReady;
+  xSemaphoreGive(systemMutex);
+
+  String body; serializeJson(doc, body);
+  HTTPClient http;
+  if (beginRequest(http, "/api/status/report")) {
+    http.addHeader("Content-Type", "application/json");
+    http.POST(body);
+    http.end();
+  }
+}
+
 void pollWebCommands() {
   if (WiFi.status() != WL_CONNECTED || webCommandId != -1) return; HTTPClient http;
   if (!beginRequest(http, "/api/commands/pending?limit=1")) return;
@@ -585,7 +650,16 @@ void pollWebCommands() {
 
     if (devId == "mode") { safelySwitchMode(action == "AUTO" ? 1 : 0); webCommandId = id; return; }
     
-    if (action == "ESTOP" || devId == "estop") { enqueueEmergencyStop(); webCommandId = id; return; }
+    // So khop RONG va tra ack NGAY. Ban hep truoc day (action == "ESTOP") bo sot
+    // cac dang viet khac va dat webCommandId thay vi tra ack, khien trang web
+    // treo cho mot lenh khong bao gio duoc xac nhan.
+    String devIdUp = devId; devIdUp.toUpperCase();
+    String actionUp = action; actionUp.toUpperCase();
+    if (actionUp.indexOf("ESTOP") >= 0 || devIdUp.indexOf("ESTOP") >= 0 || actionUp == "STOP") {
+      enqueueEmergencyStop();
+      setWebAckResult(id, true);
+      return;
+    }
 
     if (action == "FETCH_NOW" || action == "GET_DATA" || devId == "data" || devId == "system") {
       if (!isCommandInQueue("<A:GET_DATA>")) {
@@ -627,6 +701,16 @@ void pollWebCommands() {
         preferences.end();
       }
 
+      // Day nguong moi XUONG node cam bien. Thieu dong nay thi doi nguong tren
+      // web chi thay doi ban sao trong ESP32; STM32 van chay nguong cu, va hai
+      // dau se bat dong y ve luc nao la "dat nguong".
+      String dataToSave = String(phMin, 1) + "," + String(phMax, 1) + "," +
+                          String(ecMin, 1) + "," + String(ecMax, 1) + "," +
+                          String(tempMin, 1) + "," + String(tempMax, 1) + "," +
+                          String(humMin, 1) + "," + String(humMax, 1) + "," +
+                          String(timeBom) + "," + String(timeNghi);
+      enqueueCommand("<SET_DATA=" + dataToSave + ">");
+
       if (currentPage == 2) updateNextionSettingsPage();
       setWebAckResult(id, true); 
       return;
@@ -666,6 +750,10 @@ void webTask(void* parameter) {
     if ((telemetryPending || now - lastTelemetryPost >= TELEMETRY_INTERVAL) && currentWiFiState) { lastTelemetryPost = now; telemetryPending = false; postTelemetryToWeb(); }
     if (settingsPending && currentWiFiState) { settingsPending = false; pushSettingsToWeb(); }
     if ((deviceStatePending || now - lastStatePush >= STATE_PUSH_INTERVAL) && currentWiFiState) { lastStatePush = now; deviceStatePending = false; pushDeviceStateToWeb(); }
+    if (statusReportPending && currentWiFiState) {
+      statusReportPending = false;
+      pushStatusReportToWeb();
+    }
     vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
@@ -775,9 +863,15 @@ void handleLoraIncoming() {
 }
 
 void updateNextionSettingsPage() {
-  sendText("page5.t0.txt", String(phMin, 1)); sendText("page5.t1.txt", String(phMax, 1)); sendText("page5.t2.txt", String(ecMin, 1)); sendText("page5.t3.txt", String(ecMax, 1));
-  sendText("page5.t4.txt", String(tempMin, 1)); sendText("page5.t5.txt", String(tempMax, 1)); sendText("page5.t6.txt", String(humMin, 1)); sendText("page5.t7.txt", String(humMax, 1));
-  sendText("page5.t8.txt", String(timeBom)); sendText("page5.t9.txt", String(timeNghi));
+  // Dang dung o trang cai dat thi bo tien to "page5." — Nextion bao loi khi ghi
+  // co tien to vao chinh trang dang hien.
+  String p = (currentPage == 2) ? "" : "page5.";
+
+  sendText(p + "t0.txt", String(phMin, 1)); sendText(p + "t1.txt", String(phMax, 1));
+  sendText(p + "t2.txt", String(ecMin, 1)); sendText(p + "t3.txt", String(ecMax, 1));
+  sendText(p + "t4.txt", String(tempMin, 1)); sendText(p + "t5.txt", String(tempMax, 1));
+  sendText(p + "t6.txt", String(humMin, 1)); sendText(p + "t7.txt", String(humMax, 1));
+  sendText(p + "t8.txt", String(timeBom)); sendText(p + "t9.txt", String(timeNghi));
 }
 
 void processNextionCommand(String rawCmd) {
@@ -786,7 +880,15 @@ void processNextionCommand(String rawCmd) {
 
   if (cmdUpper.indexOf("MENU_READY") >= 0 || cmdUpper.indexOf("ABOUT_READY") >= 0) { currentPage = 0; updateWiFiIcon(); return; }
   if (cmdUpper.indexOf("DASHBOARD_READY") >= 0) { currentPage = 1; updateWiFiIcon(); updateDashboard(); return; }
-  if (cmdUpper.indexOf("SETTINGS_READY") >= 0) { currentPage = 2; updateWiFiIcon(); updateNextionSettingsPage(); return; }
+  if (cmdUpper.indexOf("SETTINGS_READY") >= 0) {
+    updateWiFiIcon();
+    // Chi nap lai so cu khi VUA CHUYEN TOI trang cai dat. Neu dang o san trang
+    // do (currentPage == 2) thi su kien nay den tu viec go ban phim — nap lai
+    // luc nay se xoa mat con so nguoi dung vua nhap.
+    if (currentPage != 2) updateNextionSettingsPage();
+    currentPage = 2;
+    return;
+  }
   if (cmdUpper.indexOf("CONTROL_READY") >= 0) { currentPage = 3; updateWiFiIcon(); updateNextionControlStates(); return; }
 
   if (cmdUpper.startsWith("CHECK_PASS=")) {
