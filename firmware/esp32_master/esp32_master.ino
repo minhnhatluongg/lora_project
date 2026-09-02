@@ -6,6 +6,7 @@
 #include "time.h"
 #include <Preferences.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 
 Preferences preferences;
@@ -102,7 +103,12 @@ bool isMixingReady = false;
 
 int currentPage = 0; 
 
-// Biến giả lập mực nước chạy độc lập tránh lỗi reset
+// Mo phong muc nuoc bon tron, danh cho luc DEMO tren ban khong co cam bien.
+//
+// Dat = true thi Dist4 bi GHI DE bang so mo phong moi giay, nen man hinh khong
+// con hien so do that nua. Mac dinh = false: doc that tu cam bien sieu am qua
+// LoRa. Doi mot dong nay la du de chuyen qua lai.
+const bool SIMULATE_TANK_LEVEL = false;
 float simDist4 = 80.0; 
 
 String getValue(String data, char separator, int index) {
@@ -572,10 +578,40 @@ void handleAutoIrrigationLogic() {
   }
 }
 
+// Client TLS dung chung cho moi loi goi HTTPS.
+//
+// Chi MOT tac vu (webTask) goi beginRequest, nen dung chung mot client la an
+// toan — khong co hai luong cung mo mot ket noi.
+//
+// setInsecure() = KHONG kiem chung chi may chu. Danh doi co that: mat kha nang
+// chong gia mao (ai chen giua duong truyen deu doc duoc x-api-key). Doi lai,
+// khong phai nhung chung chi CA vao firmware — ma chung chi Let's Encrypt doi
+// moi 90 ngay, nhung cung thi den han la thiet bi ngoai dong chet ket noi va
+// phai thao ra nap lai. Voi do an thi danh doi nay hop ly; muon chat hon thi
+// dung setCACert() voi chung chi goc ISRG Root X1.
+static WiFiClientSecure secureClient;
+static bool secureClientReady = false;
+
+// Tu nhan biet theo BACKEND_BASE, khong cam cung. Doi lai "http://..." la chay
+// duong thuong ngay, khong phai sua them dong nao.
+static inline bool backendUsesHttps() {
+  return String(BACKEND_BASE).startsWith("https://");
+}
+
 bool beginRequest(HTTPClient& http, const char* path) {
   if (WiFi.status() != WL_CONNECTED) return false;
   http.setConnectTimeout(HTTP_CONNECT_TIMEOUT_MS); http.setTimeout(HTTP_TIMEOUT_MS); http.setReuse(false);
-  if (!http.begin(String(BACKEND_BASE) + path)) return false;
+
+  String url = String(BACKEND_BASE) + path;
+  bool opened;
+  if (backendUsesHttps()) {
+    if (!secureClientReady) { secureClient.setInsecure(); secureClientReady = true; }
+    opened = http.begin(secureClient, url);
+  } else {
+    opened = http.begin(url);
+  }
+  if (!opened) return false;
+
   http.addHeader("x-api-key", DEVICE_API_KEY); return true;
 }
 
@@ -587,7 +623,9 @@ void ackWebCommand(int id, bool success) {
 
 void pushSettingsToWeb() {
   if (WiFi.status() != WL_CONNECTED) return; DynamicJsonDocument doc(512);
-  doc["phMin"] = phMin; doc["phMax"] = phMax; doc["ecMin"] = ecMin; doc["ecMax"] = ecMax;
+  doc["phMin"] = phMin; doc["phMax"] = phMax;
+  // Cung ly do nhu doc["ec"] o tren: web luu nguong EC theo uS/cm.
+  doc["ecMin"] = ecMin * 1000.0; doc["ecMax"] = ecMax * 1000.0;
   doc["tempMin"] = tempMin; doc["tempMax"] = tempMax; doc["humMin"] = humMin; doc["humMax"] = humMax;
   doc["timeBom"] = timeBom; doc["timeNghi"] = timeNghi;
   String body; serializeJson(doc, body); HTTPClient http;
@@ -597,7 +635,14 @@ void pushSettingsToWeb() {
 void postTelemetryToWeb() {
   if (WiFi.status() != WL_CONNECTED) return; DynamicJsonDocument doc(1024);
   xSemaphoreTake(systemMutex, portMAX_DELAY);
-  doc["temperature"] = Temperature; doc["humidity"] = Humidity; doc["ph"] = pH_Value; doc["ec"] = EC_Value;
+  doc["temperature"] = Temperature; doc["humidity"] = Humidity; doc["ph"] = pH_Value;
+  // EC: NHAN 1000 truoc khi gui len web.
+  // STM32 da chia 1000 khi doc thanh ghi Modbus nen EC_Value o day la mS/cm
+  // (vd 1.48). Nhung backend luu EC theo uS/cm va giao dien chia 1000 de hien
+  // mS/cm — gui thang so mS/cm len thi trang Dashboard hien 0.00 mS/cm.
+  // Doi ngay tai ranh gioi web, de may trang thai ben trong ESP32 va man Nextion
+  // van dung mS/cm nhu cu.
+  doc["ec"] = EC_Value * 1000.0;
   doc["n"] = Nitrogen; doc["p"] = Phosphorus; doc["k"] = Potassium; doc["dist1"] = Dist1; doc["dist2"] = Dist2; doc["dist3"] = Dist3; doc["dist4"] = Dist4;
   doc["air_temp"] = AirTemp; doc["air_hum"] = AirHum; doc["rain"] = RainPercent; doc["slave_online"] = (lastLoraRxTime > 0 && millis() - lastLoraRxTime < LORA_ONLINE_TIMEOUT);
   xSemaphoreGive(systemMutex); doc["sensor_status"] = "OK";
@@ -771,6 +816,10 @@ void processLoRaData(const String& incomingData) {
   Dist1 = getValue(raw, ',', 7).toFloat(); 
   Dist2 = getValue(raw, ',', 8).toFloat(); 
   Dist3 = getValue(raw, ',', 9).toFloat(); 
+  // Doc lai Dist4 tu goi LoRa. STM32 CO gui no o vi tri 10
+  // (xem prepareLoraSensorData trong stm32_sensor_node.ino), truoc day bi bo
+  // vi da co so mo phong ghi de. Nay mo phong tat mac dinh nen phai doc that.
+  Dist4 = getValue(raw, ',', 10).toFloat(); 
 
   RainPercent = getValue(raw, ',', 11).toInt(); AirTemp = getValue(raw, ',', 12).toFloat(); AirHum = getValue(raw, ',', 13).toFloat();
   
@@ -1054,7 +1103,7 @@ void loop() {
   // ==========================================================
   static unsigned long lastSimTime = 0;
   
-  if (millis() - lastSimTime >= 1000) { 
+  if (SIMULATE_TANK_LEVEL && millis() - lastSimTime >= 1000) { 
     xSemaphoreTake(systemMutex, portMAX_DELAY);
     
     // Bơm 3 chạy (cấp nước) -> Khoảng cách giảm 1.0cm/s (Từ 80 -> 20 mất đúng 60 giây)
