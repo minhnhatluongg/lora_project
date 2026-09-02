@@ -21,4 +21,9 @@ export const EVENTS = {
   // nên mọi thứ phát qua đây là phát cho tất cả trình duyệt đang mở. Client
   // nghe được thì tự gọi lại /api/tasks bằng token của mình.
   TASKS: 'tasks-changed',          // ai đó vừa tạo/sửa/xóa một công việc
+  // Cũng là chuông trống, cùng lý do như TASKS: socket chưa xác thực nên phát
+  // gì qua đây là phát cho MỌI trình duyệt đang mở, kể cả chưa đăng nhập. Cấu
+  // hình không phải bí mật, nhưng /api/config vẫn đòi đăng nhập mới đọc được —
+  // đẩy nguyên nội dung qua socket là lặng lẽ mở toang đúng cái cửa đó.
+  CONFIG: 'config-changed',        // ngưỡng/hiệu chuẩn vừa đổi, ở BẤT KỲ đâu
 };

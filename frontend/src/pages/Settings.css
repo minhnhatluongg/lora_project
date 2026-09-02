@@ -398,6 +398,35 @@
 .set-msg-ok { border-color: #bbf7d0; background: #f0fdf4; color: #14532d; }
 .set-msg-err { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
 .set-msg-info { border-color: #bfdbfe; background: #eff6ff; color: #1e3a8a; }
+/* flex-wrap PHẢI có: .set-msg là flex không xuống dòng, nên `flex-basis: 100%`
+   ở dòng chữ bên dưới sẽ đẩy hai cái nút tràn ra ngoài khung thay vì xuống
+   hàng — đúng kiểu tràn ngang đã gặp ở bảng người dùng. */
+.set-msg-warn {
+  flex-wrap: wrap;
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+/* Dải báo "ngưỡng đổi ở nơi khác": chữ chiếm hết chiều ngang rồi hai nút xuống
+   dòng dưới. Ở 390px mà để nút nằm cùng hàng với câu văn thì câu bị bóp còn
+   một hai từ mỗi dòng. */
+.set-remote-text { flex: 1 1 100%; min-width: 0; }
+.set-remote-btn {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border: 1px solid #d97706;
+  border-radius: 8px;
+  background: #d97706;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.set-remote-btn.ghost { background: transparent; color: #92400e; border-color: #fcd34d; }
+.set-remote-btn:hover { filter: brightness(0.95); }
+.set-remote-btn:focus-visible { outline: 2px solid #92400e; outline-offset: 2px; }
 .set-msg-sm { font-size: 12.5px; }
 
 /* ---- Bottom-row save button (passed to PageShell `actions`) -------------- */

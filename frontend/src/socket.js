@@ -46,4 +46,7 @@ export const EVENTS = {
   // vì socket này chưa xác thực nên mọi thứ phát qua đây là phát cho tất cả
   // trình duyệt đang mở. Nghe được thì tự gọi lại REST bằng token của mình.
   TASKS: 'tasks-changed',
+  // "Cấu hình vừa đổi ở đâu đó" — cũng không kèm nội dung. Nghe được thì tự gọi
+  // lại GET /api/config bằng token của mình.
+  CONFIG: 'config-changed',
 };

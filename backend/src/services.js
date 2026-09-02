@@ -415,6 +415,11 @@ export function setConfig(next) {
   db.prepare(`UPDATE app_config SET data = ? WHERE id = 1`).run(
     JSON.stringify(next)
   );
+  // Ngưỡng đổi được ở HAI nơi: trang CÀI ĐẶT và màn hình Nextion ngoài tủ (qua
+  // POST /api/config/thresholds). Không có tiếng chuông này thì đổi ở tủ xong,
+  // trang web mở sẵn vẫn hiện số cũ cho tới khi ai đó bấm F5 — mà không có gì
+  // trên màn hình gợi ý là nên bấm.
+  emit(EVENTS.CONFIG);
   return next;
 }
 

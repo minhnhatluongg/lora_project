@@ -230,6 +230,9 @@ export function Settings() {
   const dialogRef = useRef(null);
   const triggerRef = useRef(null);
   const [scrollTick, setScrollTick] = useState(0);
+  // Có người đổi ngưỡng ở nơi khác trong lúc ta đang gõ dở. Không nuốt thay đổi
+  // của họ, cũng không nuốt của mình — chỉ nói ra và để người dùng chọn.
+  const [remoteCfg, setRemoteCfg] = useState(false);
 
   // Load the config into both halves of the page state at once, so the form and
   // the deeper panels can never drift apart, and record the snapshot the dirty
@@ -304,6 +307,28 @@ export function Settings() {
     };
   }, []);
 
+  // Ngưỡng đổi được ở hai nơi, và màn hình Nextion ngoài tủ là nơi KHÔNG đi qua
+  // trang này. Trước đây web không hề biết: đổi ở tủ xong, trang đang mở vẫn vẽ
+  // số cũ vô thời hạn, và người dùng chỉ phát hiện khi tình cờ bấm F5.
+  //
+  // Nghe chuông xong PHẢI tự gọi lại REST chứ không đọc nội dung từ socket —
+  // socket chưa xác thực, nên chuông cố ý đi rỗng (xem socket.js).
+  //
+  // Đang gõ dở thì TUYỆT ĐỐI không ghi đè: mất một biểu mẫu điền nửa chừng vì
+  // một sự kiện nền là kiểu hỏng khó chịu hơn hẳn so với việc hiện số cũ thêm
+  // vài giây. Lúc đó chỉ báo, và để người dùng tự quyết lúc nào nạp lại.
+  const reloadConfig = useCallback(
+    () =>
+      api
+        .getConfig()
+        .then((c) => {
+          applyConfig(c);
+          setRemoteCfg(false);
+        })
+        .catch((e) => setMsg({ kind: 'err', text: 'Không tải lại được cấu hình: ' + e.message })),
+    [applyConfig]
+  );
+
   useEffect(() => {
     if (scrollTick) msgRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [scrollTick]);
@@ -332,6 +357,20 @@ export function Settings() {
   const dirty = Boolean(
     baseline && form && cfg && snapshot(form, cfg.tanks, cfg.automation) !== baseline
   );
+
+  const dirtyRef = useRef(false);
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
+
+  useEffect(() => {
+    const onConfig = () => {
+      if (dirtyRef.current) setRemoteCfg(true);
+      else reloadConfig();
+    };
+    socket.on(EVENTS.CONFIG, onConfig);
+    return () => socket.off(EVENTS.CONFIG, onConfig);
+  }, [reloadConfig]);
 
   // Reload / tab close.
   useEffect(() => {
@@ -740,6 +779,27 @@ export function Settings() {
             </div>
           </section>
         </div>
+
+        {/* Ngưỡng vừa đổi ở nơi khác trong lúc trang này đang có sửa đổi chưa
+            lưu. Không tự nạp lại — nạp lại là xoá mất thứ người dùng đang gõ —
+            nên nói ra và đưa cả hai lựa chọn. Kèm chữ chứ không chỉ có màu. */}
+        {remoteCfg && (
+          <div className="set-msg set-msg-warn" role="status">
+            <span className="set-msg-icon">
+              <IconWarning size={18} />
+            </span>
+            <span className="set-remote-text">
+              Ngưỡng vừa được đổi ở nơi khác (màn hình tủ điện hoặc một phiên khác).
+              Trang này đang có thay đổi chưa lưu nên chưa tự cập nhật.
+            </span>
+            <button type="button" className="set-remote-btn" onClick={reloadConfig}>
+              Nạp số mới (bỏ thay đổi đang gõ)
+            </button>
+            <button type="button" className="set-remote-btn ghost" onClick={() => setRemoteCfg(false)}>
+              Giữ nguyên
+            </button>
+          </div>
+        )}
 
         {msg && (
           <div
