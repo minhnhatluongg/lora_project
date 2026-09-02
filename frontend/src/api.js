@@ -105,7 +105,8 @@ export const api = {
   restoreDefaults: () => req('/api/system/restore-defaults', { method: 'POST' }),
 
   // --- chẩn đoán đường truyền & lệnh ---------------------------------------
-  // Chất lượng sóng LoRa theo thời gian, kèm thống kê khoảng trống dữ liệu.
+  // Chất lượng sóng WiFi (ESP32 ↔ router) theo thời gian, kèm thống kê khoảng
+  // trống dữ liệu. KHÔNG phải sóng LoRa — module E32 không cấp RSSI.
   linkQuality: (hours = 24) => req(`/api/telemetry/link?hours=${hours}`),
   // Nhật ký lệnh gần đây, kèm bốn mốc thời gian của từng lệnh.
   recentCommands: (limit = 25) => req(`/api/commands/recent?limit=${limit}`),

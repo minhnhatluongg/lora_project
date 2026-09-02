@@ -8,24 +8,33 @@ nhưng chưa màn hình nào dùng tới:
 
 | Bảng | Đọc từ | Đã có từ |
 |---|---|---|
-| Chất lượng sóng LoRa | `telemetry.lora_rssi` | ngày đầu, mỗi dòng đo một giá trị |
+| Chất lượng sóng WiFi | `telemetry.wifi_rssi` | từ bản firmware nạp sau ngày 2/9/2026 |
 | Đường đi của lệnh | `commands.created_at / run_after / sent_at / acked_at` | từ khi có hàng đợi lệnh |
 
 ---
 
-## 1. Chất lượng sóng LoRa
+## 1. Chất lượng sóng WiFi
+
+> **Vì sao không phải sóng LoRa.** Bảng này ban đầu định vẽ đoạn đáng quan tâm
+> hơn — giữa node cảm biến và ESP32. Nhưng module LoRa **E32** nối qua UART
+> **không có lệnh đọc RSSI**, nên firmware chưa bao giờ gửi được giá trị nào và
+> cột `lora_rssi` rỗng từ đầu. Muốn đo thật đoạn đó phải đổi sang module dòng
+> **E22**. `WiFi.RSSI()` thì đo được ngay, không đổi phần cứng — khác đoạn
+> đường truyền, nhưng vẫn là số đo RF thật.
 
 ### Con số này là gì
 
-**RSSI** (Received Signal Strength Indicator) — cường độ ESP32 đo được **lúc nó
-nhận gói từ node cảm biến STM32**. Đơn vị dBm, luôn là số âm. **Càng gần 0 càng
-mạnh.**
+**RSSI** (Received Signal Strength Indicator) — cường độ sóng **giữa ESP32 và
+router WiFi**. Đơn vị dBm, luôn là số âm. **Càng gần 0 càng mạnh.**
 
 | Mức | Ý nghĩa |
 |---|---|
-| trên −70 dBm | Tốt |
-| −70 đến −90 dBm | Trung bình |
-| dưới −90 dBm | Yếu |
+| trên −60 dBm | Tốt |
+| −60 đến −75 dBm | Trung bình |
+| dưới −75 dBm | Yếu |
+
+Ngưỡng của WiFi **khác hẳn LoRa**: LoRa thu tới −120 dBm vẫn giải mã tốt nhờ
+trải phổ, còn WiFi xuống dưới −75 dBm là đã rớt gói và chậm thấy rõ.
 
 Ba dải này vẽ mờ làm nền biểu đồ, nên nhìn đường nằm ở dải nào là biết ngay,
 không phải nhẩm ngưỡng.
@@ -68,13 +77,15 @@ lúc với điều kiện của nó.
 
 ### Cách diễn trước hội đồng
 
-1. Mở khung **1 giờ**, chỉ vào đường và nói đây là sóng thật giữa hai node.
-2. **Cầm node cảm biến đi xa dần** — ra hành lang, xuống tầng. Đường tụt xuống
-   thấy rõ trong vòng vài giây.
+1. Mở khung **1 giờ**, chỉ vào đường và nói đây là sóng thật giữa ESP32 và router.
+2. **Cầm tủ điện (hoặc ESP32) đi xa router dần** — ra hành lang, xuống tầng.
+   Đường tụt xuống thấy rõ trong vòng vài giây.
 3. Đi đủ xa cho mất hẳn → đường **đứt đoạn**, ô *Lần mất liên lạc* tăng lên 1.
 4. Mang lại gần → đường nối lại ở mức cao.
 
-Đó là toàn bộ lý lẽ cho việc chọn LoRa, diễn trong 2 phút, bằng số liệu thật.
+Nếu hội đồng hỏi vì sao không đo sóng LoRa, trả lời thẳng: **module E32 không
+cấp RSSI qua UART**; đo được đoạn đó thì phải đổi sang E22. Nói ra giới hạn của
+phần cứng đúng hơn là bịa một con số.
 
 ---
 
@@ -153,14 +164,18 @@ của ngoài đồng.
 
 ## Câu hỏi hội đồng có thể hỏi
 
+**"Sao không đo sóng LoRa?"**
+Module E32 nối qua UART không có lệnh đọc RSSI. Đổi sang module dòng E22
+(LLCC68/SX1262) thì đọc được — nhưng đó là đổi phần cứng.
+
 **"Sao không hiện tỉ lệ mất gói?"**
 Vì giao thức không đánh số thứ tự gói nên không đếm được. Muốn có con số đó phải
 thêm một byte số thứ tự vào bản tin LoRa ở cả hai đầu — làm được, nhưng chưa
 làm, và không công bố một con số mình không đo được.
 
-**"RSSI −84 dBm có sao không?"**
-Nằm trong dải trung bình, vẫn thu tốt. Đáng lo là khi đường tụt xuống dưới −90
-dBm **và** ở đó lâu, hoặc khi số lần mất liên lạc tăng dần theo ngày.
+**"RSSI −70 dBm có sao không?"**
+Nằm trong dải trung bình, WiFi vẫn chạy tốt. Đáng lo là khi đường tụt xuống dưới
+−75 dBm **và** ở đó lâu, hoặc khi số lần mất liên lạc tăng dần theo ngày.
 
 **"Vì sao lệnh mất tới 3 giây mới tới?"**
 Vì kiến trúc kéo (pull), do ESP32 nằm sau NAT. Đổi lại: ESP32 không cần IP tĩnh,

@@ -79,6 +79,10 @@ telemetryRouter.post(
     };
 
     const loraRssi = num(pick(b, 'lora_rssi', 'rssi'));
+    // Cường độ sóng WiFi giữa ESP32 và router. Trường RIÊNG, không gộp vào
+    // lora_rssi: hai đoạn đường truyền khác nhau, gộp lại là mất khả năng nói
+    // đoạn nào yếu.
+    const wifiRssi = num(pick(b, 'wifi_rssi', 'wifiRssi'));
     const slaveOnline = pick(b, 'slave_online', 'slaveOnline');
     // 'OK' | 'CRC' | 'HEADER' | 'TIMEOUT' | 'SHORT' — mirrors the STM32's
     // Modbus error branches so the dashboard can show *why* data went stale.
@@ -89,12 +93,12 @@ telemetryRouter.post(
         `INSERT INTO telemetry
            (temperature, humidity, ph, ec, n, p, k,
             air_temp, air_humidity, rain,
-            dist1, dist2, dist3, dist4, lora_rssi)
+            dist1, dist2, dist3, dist4, lora_rssi, wifi_rssi)
          VALUES (@temperature, @humidity, @ph, @ec, @n, @p, @k,
                  @air_temp, @air_humidity, @rain,
-                 @dist1, @dist2, @dist3, @dist4, @lora_rssi)`
+                 @dist1, @dist2, @dist3, @dist4, @lora_rssi, @wifi_rssi)`
       )
-      .run({ ...reading, lora_rssi: loraRssi });
+      .run({ ...reading, lora_rssi: loraRssi, wifi_rssi: wifiRssi });
 
     const row = withLevels(
       db.prepare(`SELECT * FROM telemetry WHERE id = ?`).get(info.lastInsertRowid)
@@ -176,12 +180,14 @@ telemetryRouter.get(
   })
 );
 
-// Chất lượng đường truyền LoRa theo thời gian. ?hours=24
+// Chất lượng đường truyền WiFi theo thời gian. ?hours=24
 //
-// Mỗi dòng đo đã mang sẵn `lora_rssi` — cường độ sóng lúc ESP32 nhận gói từ
-// node cảm biến — nhưng cả giao diện chỉ hiện đúng MỘT con số hiện tại. Một
-// con số không nói được đường truyền có ổn định không, mà đó lại là câu hỏi
-// trung tâm của một hệ LoRa.
+// Đọc `wifi_rssi` chứ KHÔNG phải `lora_rssi`. Sóng LoRa giữa node cảm biến và
+// ESP32 là thứ đáng đo hơn, nhưng module E32 nối qua UART không có lệnh đọc
+// RSSI — cột đó rỗng từ đầu và sẽ rỗng cho tới khi đổi sang module dòng E22.
+// WiFi.RSSI() thì đo được ngay, không đổi phần cứng: khác đoạn đường truyền
+// nhưng vẫn là số đo RF thật, và vẫn trả lời được câu hỏi trung tâm — đường
+// truyền có đứng vững không, hay chập chờn.
 //
 // VỀ "MẤT GÓI": giao thức giữa hai node KHÔNG có số thứ tự gói, nên không có
 // cách nào đếm đúng số gói đã mất — nói "tỉ lệ mất gói x%" là bịa. Thứ đo được
@@ -203,11 +209,11 @@ telemetryRouter.get(
     const series = db
       .prepare(
         `SELECT MIN(created_at)          AS t,
-                ROUND(AVG(lora_rssi), 1) AS rssi,
-                MIN(lora_rssi)           AS worst,
+                ROUND(AVG(wifi_rssi), 1) AS rssi,
+                MIN(wifi_rssi)           AS worst,
                 COUNT(*)                 AS n
            FROM telemetry
-          WHERE created_at >= datetime('now', ?) AND lora_rssi IS NOT NULL
+          WHERE created_at >= datetime('now', ?) AND wifi_rssi IS NOT NULL
           GROUP BY CAST(strftime('%s', created_at) AS INTEGER) / CAST(? AS INTEGER)
           ORDER BY t ASC`
       )
@@ -216,11 +222,11 @@ telemetryRouter.get(
     const stats = db
       .prepare(
         `SELECT COUNT(*)                 AS samples,
-                ROUND(AVG(lora_rssi), 1) AS avg,
-                MAX(lora_rssi)           AS best,
-                MIN(lora_rssi)           AS worst
+                ROUND(AVG(wifi_rssi), 1) AS avg,
+                MAX(wifi_rssi)           AS best,
+                MIN(wifi_rssi)           AS worst
            FROM telemetry
-          WHERE created_at >= datetime('now', ?) AND lora_rssi IS NOT NULL`
+          WHERE created_at >= datetime('now', ?) AND wifi_rssi IS NOT NULL`
       )
       .get(since);
 

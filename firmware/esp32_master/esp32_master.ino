@@ -643,6 +643,14 @@ void postTelemetryToWeb() {
   // Doi ngay tai ranh gioi web, de may trang thai ben trong ESP32 va man Nextion
   // van dung mS/cm nhu cu.
   doc["ec"] = EC_Value * 1000.0;
+  // Cuong do song WiFi giua ESP32 va router, don vi dBm (luon am, cang gan 0
+  // cang manh). Do duoc ngay khong can them phan cung nao.
+  //
+  // KHONG phai song LoRa. Module E32 noi qua UART khong co lenh doc RSSI, nen
+  // doan ESP32 <-> node cam bien khong do duoc — muon do phai doi sang module
+  // dong E22. Gui rieng mot truong `wifi_rssi` de khong ai nham hai doan duong
+  // truyen voi nhau.
+  doc["wifi_rssi"] = WiFi.RSSI();
   doc["n"] = Nitrogen; doc["p"] = Phosphorus; doc["k"] = Potassium; doc["dist1"] = Dist1; doc["dist2"] = Dist2; doc["dist3"] = Dist3; doc["dist4"] = Dist4;
   doc["air_temp"] = AirTemp; doc["air_hum"] = AirHum; doc["rain"] = RainPercent; doc["slave_online"] = (lastLoraRxTime > 0 && millis() - lastLoraRxTime < LORA_ONLINE_TIMEOUT);
   xSemaphoreGive(systemMutex); doc["sensor_status"] = "OK";

@@ -15,14 +15,19 @@ import { socket, EVENTS } from '../socket.js';
 // định dạng của SQLite ("YYYY-MM-DD HH:MM:SS") và tự nối thêm 'Z'. Trục thời
 // gian của recharts đưa xuống số mili-giây, đổi sang ISO thì chuỗi đã có sẵn
 // 'Z' và bị nối thành '...ZZ' — ra Invalid Date trên mọi nhãn trục.
-import { IconLora, IconWarning } from './Icons.jsx';
+import { IconWifi, IconWarning } from './Icons.jsx';
 import './Diagnostics.css';
 
-// Chất lượng đường truyền LoRa giữa node cảm biến và ESP32.
+// Chất lượng đường truyền WiFi giữa ESP32 và router.
 //
-// Mỗi dòng đo vẫn luôn mang theo `lora_rssi`, nhưng trước đây cả giao diện chỉ
-// hiện đúng một con số hiện tại — không đủ để trả lời câu hỏi thật sự quan
-// trọng với một hệ LoRa: đường truyền có ĐỨNG VỮNG không, hay chập chờn.
+// Ban đầu bảng này định vẽ sóng LoRa — đoạn đáng quan tâm hơn, giữa node cảm
+// biến và ESP32. Nhưng module LoRa E32 nối qua UART KHÔNG có lệnh đọc RSSI, nên
+// firmware chưa bao giờ gửi được giá trị nào và cột `lora_rssi` rỗng từ đầu.
+// Muốn đo thật đoạn đó phải đổi sang module dòng E22.
+//
+// WiFi.RSSI() thì đo được ngay, không đổi phần cứng. Khác đoạn đường truyền,
+// nhưng vẫn là số đo RF thật và vẫn trả lời đúng câu hỏi trung tâm: đường
+// truyền có ĐỨNG VỮNG không, hay chập chờn.
 
 const RANGES = [
   { hours: 1, label: '1 giờ' },
@@ -31,12 +36,14 @@ const RANGES = [
   { hours: 168, label: '7 ngày' },
 ];
 
-// Ba dải chất lượng, cùng ngưỡng mà StatusPanel đang dùng cho con số tức thời —
-// để hai chỗ không nói hai kiểu về cùng một mức sóng.
+// Ngưỡng của WiFi, KHÔNG dùng lại ngưỡng LoRa. Hai công nghệ khác hẳn nhau:
+// LoRa thu được tới -120 dBm vẫn giải mã tốt nhờ trải phổ, còn WiFi xuống dưới
+// -75 dBm là đã rớt gói và chậm thấy rõ. Giữ nguyên dải cũ ở đây thì một đường
+// truyền WiFi đang chật vật vẫn nằm gọn trong vùng "Tốt".
 const BANDS = [
   { from: -60, to: 0, label: 'Tốt', fill: '#16a34a' },
-  { from: -90, to: -70, label: 'Trung bình', fill: '#d97706' },
-  { from: -140, to: -90, label: 'Yếu', fill: '#dc2626' },
+  { from: -75, to: -60, label: 'Trung bình', fill: '#d97706' },
+  { from: -100, to: -75, label: 'Yếu', fill: '#dc2626' },
 ];
 
 const GRID = '#e6ebf2';
@@ -117,8 +124,8 @@ export function LinkQualityPanel() {
     <div className="panel diag-panel">
       <div className="panel-head">
         <h3>
-          <IconLora size={17} />
-          Chất lượng sóng LoRa
+          <IconWifi size={17} />
+          Chất lượng sóng WiFi
         </h3>
         <div className="seg">
           {RANGES.map((r) => (
@@ -135,8 +142,8 @@ export function LinkQualityPanel() {
       </div>
 
       <p className="diag-note">
-        Cường độ sóng ESP32 đo được khi nhận gói từ node cảm biến. Càng gần 0 càng mạnh;
-        <strong> −70 dBm</strong> trở lên là tốt, dưới <strong>−90 dBm</strong> là yếu.
+        Cường độ sóng giữa ESP32 và router. Càng gần 0 càng mạnh;
+        <strong> −60 dBm</strong> trở lên là tốt, dưới <strong>−75 dBm</strong> là yếu.
       </p>
 
       {err && (
@@ -148,7 +155,8 @@ export function LinkQualityPanel() {
 
       {empty ? (
         <p className="diag-empty">
-          Chưa có số đo nào kèm cường độ sóng trong khoảng này.
+          Chưa có số đo nào kèm cường độ sóng WiFi trong khoảng này. Cần nạp firmware
+          ESP32 mới — bản cũ không gửi giá trị này.
         </p>
       ) : (
         <>
@@ -249,10 +257,11 @@ export function LinkQualityPanel() {
               hai node không đánh số thứ tự gói, nên KHÔNG có cách nào đếm đúng
               số gói đã mất — công bố một "tỉ lệ mất gói" ở đây sẽ là con số bịa. */}
           <p className="diag-caveat">
-            Giao thức LoRa giữa hai node không đánh số thứ tự gói, nên không đếm được chính xác
-            số gói đã mất. Cột <strong>Lần mất liên lạc</strong> đếm những quãng im lặng dài bất
-            thường — dài hơn {data.gapThresholdSeconds} giây, tức gấp 5 lần nhịp gửi thường đo
-            được{data.typicalIntervalSeconds ? ` (${data.typicalIntervalSeconds} giây)` : ''}.
+            Đây là sóng <strong>WiFi</strong> (ESP32 ↔ router), không phải sóng LoRa. Module LoRa
+            E32 nối qua UART không cấp giá trị RSSI, nên đoạn ESP32 ↔ node cảm biến không đo được
+            — muốn đo phải đổi sang module dòng E22. Cột <strong>Lần mất liên lạc</strong> đếm
+            những quãng im lặng dài bất thường — dài hơn {data.gapThresholdSeconds} giây, tức gấp
+            5 lần nhịp gửi thường đo được{data.typicalIntervalSeconds ? ` (${data.typicalIntervalSeconds} giây)` : ''}.
           </p>
         </>
       )}

@@ -38,7 +38,8 @@ db.exec(`
     dist2        REAL,
     dist3        REAL,
     dist4        REAL,
-    lora_rssi    INTEGER,
+    lora_rssi    INTEGER,   -- LoRa: E32 khong cap RSSI, cot nay luon NULL (xem v13)
+    wifi_rssi    INTEGER,   -- WiFi: ESP32 <-> router, WiFi.RSSI()
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_telemetry_created ON telemetry (created_at);
@@ -392,6 +393,29 @@ if (Number(getMeta('schema_version') || 1) < 12) {
     console.log(`[db] migrated: thêm cột system_status.mode_confirmed_at (chế độ đã được phần cứng xác nhận chưa)`);
   }
   setMeta('schema_version', 12);
+}
+
+// v13: cuong do song WiFi.
+//
+// Cot `lora_rssi` van o day va van co nghia cua no — cuong do song LoRa giua
+// node cam bien va ESP32. Chi co dieu KHONG AI DO DUOC no: module LoRa E32 noi
+// qua UART va khong co lenh doc RSSI, nen firmware chua bao gio gui gia tri nao
+// va cot do rong tu dau. Muon do that phai doi sang module dong E22.
+//
+// Cai DO DUOC ngay, khong doi phan cung, la WiFi.RSSI() — song giua ESP32 va
+// router. Khac doan duong nhung van la so do RF that.
+//
+// Cot RIENG chu khong muon cot cu: nhet so WiFi vao `lora_rssi` thi ten cot noi
+// mot dang, du lieu mot neo — bat ky ai doc CSDL sau nay deu bi lua.
+if (Number(getMeta('schema_version') || 1) < 13) {
+  const has = db
+    .prepare(`SELECT 1 FROM pragma_table_info('telemetry') WHERE name = 'wifi_rssi'`)
+    .get();
+  if (!has) {
+    db.prepare(`ALTER TABLE telemetry ADD COLUMN wifi_rssi INTEGER`).run();
+    console.log(`[db] migrated: thêm cột telemetry.wifi_rssi (cường độ sóng WiFi của ESP32)`);
+  }
+  setMeta('schema_version', 13);
 }
 
 // --- Seed default rows if missing -------------------------------------------
