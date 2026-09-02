@@ -212,8 +212,25 @@ export function setEmergencyStop(engaged, actor = 'người dùng') {
   );
 
   if (engaged) {
-    enqueueAllDevices('OFF');
+    // Thứ tự ba dòng dưới đây LÀ nội dung của bản sửa — trước đó nút này gần
+    // như không tắt được gì khi tủ đang chạy TỰ ĐỘNG.
+    //
+    // 1. 'estop' đi ĐẦU. Firmware bắt device_id/action có chứa ESTOP rồi chạy
+    //    enqueueEmergencyStop(): xoá hàng đợi nội bộ, tự đặt lại MANUAL, và phát
+    //    thẳng <B:ESTOP> xuống LoRa hai lần. Cả dàn tắt trong MỘT nhịp hỏi
+    //    (~3 giây) thay vì lần lượt từng rơ-le.
+    // 2. mode=MANUAL đi TRƯỚC các lệnh TẮT. Ở TỰ ĐỘNG, firmware từ chối thẳng
+    //    mọi lệnh bơm/van gửi từ web (`if (systemMode != 0) ack(false)`), nên
+    //    thứ tự cũ — chín lệnh TẮT rồi mới tới mode — làm cả chín lệnh bị đá về.
+    //    Đúng lúc cần tắt nhất thì không tắt được gì.
+    // 3. Các lệnh TẮT vẫn giữ, làm lớp đỡ phòng khi bước 1 không tới nơi.
+    //
+    // Ở nhịp hỏi 3 giây và limit=1, cả chuỗi này mất ~33 giây để rút hết. Bước 1
+    // mới là cái dừng thật; phần còn lại chỉ là dư thừa vô hại vì lúc đó mọi thứ
+    // đã tắt và chế độ đã là THỦ CÔNG.
+    enqueueCommand('estop', 'ESTOP');
     enqueueCommand('mode', 'MANUAL');
+    enqueueAllDevices('OFF');
     setMode('MANUAL');
     createAlert(
       'danger',
