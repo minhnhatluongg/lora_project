@@ -55,7 +55,28 @@ volatile bool webAckPending = false;
 bool webAckSuccess = false;
 
 unsigned long lastWebPoll = 0, lastTelemetryPost = 0, lastStatePush = 0;
-const unsigned long WEB_POLL_INTERVAL = 3000UL, TELEMETRY_INTERVAL = 3000UL, STATE_PUSH_INTERVAL = 5000UL;
+// WEB_POLL_INTERVAL khong con la "do tre cua mot lenh" nua. May chu GIU yeu cau
+// lai toi WEB_POLL_HOLD_MS (xem ?wait= trong routes/commands.js) roi tra ve
+// NGAY khi co lenh, nen do tre gio xap xi thoi gian truyen chu khong phai chu
+// ky hoi. Con so nay chi la khoang nghi giua hai lan mo lai duong cho.
+//
+// Truoc day de 3000: bam BAT roi cho trung binh 1,5 giay, xau nhat 3 giay.
+// Rut ngan chu ky la cach sai — moi luot hoi mo mot ket noi TLS moi
+// (setReuse false), ma tac vu mang nay chay TUAN TU nen hoi day gap ba se
+// giau mat cho cua viec day so do len.
+const unsigned long WEB_POLL_INTERVAL = 150UL, TELEMETRY_INTERVAL = 3000UL, STATE_PUSH_INTERVAL = 5000UL;
+
+// Muc giu KHONG co dinh — no an theo cho trong con lai truoc lan day so do ke
+// tiep. Ly do: tac vu mang nay chay TUAN TU, dang giu yeu cau lenh thi khong
+// day telemetry duoc. Giu cung 2 giay thi so do bi tre toi 2 giay, va vi moi
+// chu ky ngan hon 3 giay nen so luot hoi con TANG (do duoc: +64%) — moi luot
+// lai la mot bat tay TLS vi setReuse dang tat.
+//
+// Giu dung toi luc telemetry toi han thi ca hai deu duoc: so luot hoi giu
+// nguyen nhu cu (~1 luot moi 3 giay), so do khong tre mot mili giay nao, ma do
+// tre cua lenh tut tu ~1,5 giay xuong con bang thoi gian truyen.
+const unsigned long WEB_POLL_HOLD_MIN_MS = 250UL;
+const unsigned long WEB_POLL_HOLD_MAX_MS = 3000UL;
 
 String systemPassword; 
 unsigned long lastUpdate = 0; 
@@ -691,9 +712,12 @@ void pushStatusReportToWeb() {
   }
 }
 
-void pollWebCommands() {
+void pollWebCommands(unsigned long holdMs) {
   if (WiFi.status() != WL_CONNECTED || webCommandId != -1) return; HTTPClient http;
-  if (!beginRequest(http, "/api/commands/pending?limit=1")) return;
+  if (!beginRequest(http, ("/api/commands/pending?limit=1&wait=" + String(holdMs)).c_str())) return;
+  // Han doc rieng cho luot nay: may chu co the giu toi holdMs truoc khi tra
+  // loi, con HTTP_TIMEOUT_MS mac dinh (2500) thi qua sat.
+  http.setTimeout(holdMs + 1500);
   if (http.GET() != 200) { http.end(); return; } String response = http.getString(); http.end();
   DynamicJsonDocument doc(1024); if (deserializeJson(doc, response)) return;
 
@@ -799,7 +823,16 @@ void webTask(void* parameter) {
     xSemaphoreGive(systemMutex);
 
     if (sendAck) ackWebCommand(ackId, ackSuccess);
-    if (now - lastWebPoll >= WEB_POLL_INTERVAL) { lastWebPoll = now; pollWebCommands(); }
+    if (now - lastWebPoll >= WEB_POLL_INTERVAL) {
+      lastWebPoll = now;
+      // Cho trong con lai truoc lan day so do ke tiep. Con no thi giu bang do,
+      // khong con thi hoi nhanh roi tra ve ngay de telemetry di truoc.
+      unsigned long since = now - lastTelemetryPost;
+      unsigned long budget = since >= TELEMETRY_INTERVAL ? 0UL : TELEMETRY_INTERVAL - since;
+      if (budget > WEB_POLL_HOLD_MAX_MS) budget = WEB_POLL_HOLD_MAX_MS;
+      if (budget < WEB_POLL_HOLD_MIN_MS) budget = WEB_POLL_HOLD_MIN_MS;
+      pollWebCommands(budget);
+    }
     if ((telemetryPending || now - lastTelemetryPost >= TELEMETRY_INTERVAL) && currentWiFiState) { lastTelemetryPost = now; telemetryPending = false; postTelemetryToWeb(); }
     if (settingsPending && currentWiFiState) { settingsPending = false; pushSettingsToWeb(); }
     if ((deviceStatePending || now - lastStatePush >= STATE_PUSH_INTERVAL) && currentWiFiState) { lastStatePush = now; deviceStatePending = false; pushDeviceStateToWeb(); }

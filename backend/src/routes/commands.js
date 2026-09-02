@@ -2,17 +2,44 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { deviceAuth, asyncH } from '../middleware.js';
 import { requireAuth } from '../auth.js';
-import { setDeviceState, setMode, touchMaster, sweepCommands } from '../services.js';
+import {
+  setDeviceState,
+  setMode,
+  touchMaster,
+  sweepCommands,
+  commandQueue,
+} from '../services.js';
 
 export const commandsRouter = Router();
 
 // ESP32 master polls this to fetch pending commands, then drives the actuators.
 // Marks them 'sent' so they aren't handed out twice — but sweepCommands() will
 // re-offer any that go unacked, so a master crashing here loses nothing.
+// Trần cứng cho `wait`. ESP32 hiện giữ 2 giây, nhưng để rộng cho sau này.
+const MAX_WAIT_MS = 25000;
+
+// Bao lâu nữa thì lệnh bị giữ theo lịch gần nhất tới hạn (ms), hoặc null nếu
+// không có cái nào. Không có con số này thì một yêu cầu chờ 25 giây sẽ ngủ qua
+// mất một lệnh đã hẹn chạy sau 2 giây — nút "Kiểm tra toàn dàn" giãn đúng 2
+// giây một bậc, nên đây không phải trường hợp hiếm.
+function msUntilNextScheduled() {
+  const row = db
+    .prepare(
+      `SELECT MIN(run_after) AS next FROM commands
+       WHERE status = 'pending' AND run_after IS NOT NULL`
+    )
+    .get();
+  if (!row?.next) return null;
+  // SQLite datetime('now') là UTC nhưng không kèm hậu tố; thiếu 'Z' thì Date()
+  // đọc thành giờ địa phương và lệch nguyên múi giờ.
+  const due = Date.parse(row.next.replace(' ', 'T') + 'Z');
+  return Number.isFinite(due) ? Math.max(0, due - Date.now()) : null;
+}
+
 commandsRouter.get(
   '/pending',
   deviceAuth,
-  asyncH((req, res) => {
+  asyncH(async (req, res) => {
     touchMaster();
     sweepCommands();
 
@@ -25,21 +52,66 @@ commandsRouter.get(
     // run_after holds a command back without taking it out of the queue, so a
     // whole-panel switch-on arrives spread over time however fast the master
     // polls and whatever limit it asks for.
-    const pending = db
-      .prepare(
-        `SELECT * FROM commands
-         WHERE status = 'pending' AND (run_after IS NULL OR run_after <= datetime('now'))
-         ORDER BY id ASC LIMIT ?`
-      )
-      .all(limit);
-    if (pending.length) {
-      const ids = pending.map((c) => c.id);
-      db.prepare(
-        `UPDATE commands SET status = 'sent', sent_at = datetime('now')
-         WHERE id IN (${ids.map(() => '?').join(',')})`
-      ).run(...ids);
-    }
-    res.json(pending);
+    const take = () => {
+      const rows = db
+        .prepare(
+          `SELECT * FROM commands
+           WHERE status = 'pending' AND (run_after IS NULL OR run_after <= datetime('now'))
+           ORDER BY id ASC LIMIT ?`
+        )
+        .all(limit);
+      if (rows.length) {
+        const ids = rows.map((c) => c.id);
+        db.prepare(
+          `UPDATE commands SET status = 'sent', sent_at = datetime('now')
+           WHERE id IN (${ids.map(() => '?').join(',')})`
+        ).run(...ids);
+      }
+      return rows;
+    };
+
+    const first = take();
+    // ?wait=<ms> — giữ yêu cầu lại thay vì trả mảng rỗng ngay.
+    //
+    // Vì sao cần: ESP32 nằm sau NAT nên máy chủ không gọi xuống được, thiết bị
+    // phải tự hỏi. Hỏi theo chu kỳ thì độ trễ CHÍNH LÀ chu kỳ đó — 3 giây một
+    // lượt nghĩa là bấm BẬT xong chờ trung bình 1,5 giây. Rút ngắn chu kỳ là
+    // cách sai: mỗi lượt hỏi mở một kết nối TLS mới (firmware đặt setReuse
+    // false), hỏi dày gấp ba là bắt tay TLS gấp ba, và tác vụ mạng trên ESP32
+    // chạy tuần tự nên nó sẽ giành mất chỗ của việc đẩy số đo.
+    //
+    // Giữ yêu cầu lại thì ngược lại: ÍT lượt hỏi hơn mà độ trễ gần bằng thời
+    // gian truyền. Lệnh vừa xếp vào là chuông reo, trả về ngay.
+    //
+    // Không truyền `wait` thì hành xử y như cũ — firmware bản cũ đang chạy
+    // ngoài đồng không bị ảnh hưởng gì.
+    const wait = Math.max(0, Math.min(Number(req.query.wait) || 0, MAX_WAIT_MS));
+    if (first.length || !wait) return res.json(first);
+
+    const scheduled = msUntilNextScheduled();
+    const hold = scheduled === null ? wait : Math.min(wait, scheduled + 50);
+
+    await new Promise((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        commandQueue.off('queued', finish);
+        req.off('close', finish);
+        resolve();
+      };
+      const timer = setTimeout(finish, hold);
+      commandQueue.on('queued', finish);
+      // Máy chủ tắt hoặc thiết bị rớt mạng giữa chừng: dọn người nghe, nếu
+      // không thì mỗi lượt hỏi hỏng lại bỏ lại một cái treo trên EventEmitter.
+      req.on('close', finish);
+    });
+
+    // Đã đóng kết nối thì đừng ĐỘNG vào hàng đợi: take() đánh dấu lệnh là 'sent',
+    // mà không còn ai nhận thì lệnh đó nằm chờ hết hạn thử lại mới quay ra.
+    if (req.destroyed) return undefined;
+    return res.json(take());
   })
 );
 

@@ -508,6 +508,18 @@ export const openapiSpec = {
     },
     '/api/commands/pending': {
       get: { tags: ['Commands'], summary: 'ESP32 lấy lệnh chờ', security: [{ apiKeyAuth: [] }],
+        description:
+          '`wait` (ms) giữ yêu cầu lại thay vì trả mảng rỗng ngay: trả về **ngay khi** có lệnh mới ' +
+          'vào hàng đợi, hoặc khi hết hạn giữ (trần 25000 ms). Bỏ trống `wait` thì hành xử y như ' +
+          'trước — firmware bản cũ không bị ảnh hưởng.' +
+          '\n\n' +
+          'Mức giữ tự co lại nếu có lệnh đang hẹn giờ sắp tới hạn, nên một yêu cầu giữ 25 giây ' +
+          'không thể ngủ quên qua lệnh hẹn chạy sau 2 giây.',
+        parameters: [
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 100, maximum: 100 } },
+          { name: 'wait', in: 'query', schema: { type: 'integer', default: 0, maximum: 25000 },
+            description: 'Giữ yêu cầu tối đa bao nhiêu mili giây. 0 = trả về ngay.' },
+        ],
         responses: { 200: { description: 'Mảng Command', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Command' } } } } } } },
     },
     '/api/commands/{id}/ack': {

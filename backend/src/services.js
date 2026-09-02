@@ -1,5 +1,6 @@
 import { db } from './db.js';
 import { config } from './config.js';
+import { EventEmitter } from 'node:events';
 import { emit, EVENTS } from './realtime.js';
 
 // ---- Devices ---------------------------------------------------------------
@@ -277,6 +278,14 @@ const LIVE_COMMAND_STATUSES = `('pending', 'sent')`;
 // Pressing ON then OFF must leave ONE instruction, not two that replay in order.
 // delaySeconds holds the command back in the queue: it is 'pending' but the
 // master is not offered it until then. Used to stagger a whole-panel switch-on.
+// Chuông trong tiến trình, KHÔNG phải socket: dùng để đánh thức một yêu cầu
+// /pending đang nằm chờ (xem `wait` trong routes/commands.js). Không có nó thì
+// đường chờ chỉ biết hết giờ, và một lệnh vừa xếp vào vẫn phải đợi hết lượt.
+export const commandQueue = new EventEmitter();
+// Một thiết bị = một người nghe. Nới trần để một lúc nào đó có vài con ESP32
+// cùng chờ thì Node không cảnh báo nhầm là rò rỉ bộ nhớ.
+commandQueue.setMaxListeners(50);
+
 export function enqueueCommand(deviceId, action, { delaySeconds = 0 } = {}) {
   db.prepare(
     `UPDATE commands SET status = 'superseded'
@@ -289,7 +298,9 @@ export function enqueueCommand(deviceId, action, { delaySeconds = 0 } = {}) {
        VALUES (?, ?, CASE WHEN ? > 0 THEN datetime('now', ?) ELSE NULL END)`
     )
     .run(deviceId, action, delaySeconds, `+${delaySeconds} seconds`);
-  return db.prepare(`SELECT * FROM commands WHERE id = ?`).get(info.lastInsertRowid);
+  const row = db.prepare(`SELECT * FROM commands WHERE id = ?`).get(info.lastInsertRowid);
+  commandQueue.emit('queued', row);
+  return row;
 }
 
 export function hasLiveCommand(deviceId) {
