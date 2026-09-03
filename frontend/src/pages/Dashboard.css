@@ -482,3 +482,59 @@
 @media (prefers-reduced-motion: reduce) {
   .dash-fetch-btn.is-busy .dash-fetch-icon { animation: none; }
 }
+
+/* ---- Xuất báo cáo Excel -------------------------------------------------- */
+.exp-panel { margin-top: 16px; }
+.exp-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 6px;
+}
+.exp-head h3 { margin: 0; }
+.exp-icon { line-height: 0; color: #16a34a; flex-shrink: 0; }
+.exp-desc {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Cuộn xuống một cột ở màn hẹp. flex-wrap phải có, nếu không ba nút bị bóp
+   đến mức chữ gợi ý xuống dòng từng chữ một. */
+.exp-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.exp-btn {
+  flex: 1 1 130px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 11px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.exp-btn:hover:not(:disabled) { border-color: #16a34a; background: #f0fdf4; }
+.exp-btn:focus-visible { outline: 2px solid #16a34a; outline-offset: 2px; }
+.exp-btn:disabled { opacity: 0.55; cursor: default; }
+.exp-btn-label { font-size: 14px; font-weight: 800; letter-spacing: 0.01em; }
+.exp-btn-hint { font-size: 11px; color: var(--muted); }
+
+.exp-err {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 12px 0 0;
+  color: #991b1b;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

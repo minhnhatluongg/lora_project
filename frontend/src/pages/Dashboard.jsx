@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { PageShell } from '../components/PageShell.jsx';
 import { LinkQualityPanel } from '../components/LinkQualityPanel.jsx';
 import { CommandTimeline } from '../components/CommandTimeline.jsx';
+import { ExportPanel } from '../components/ExportPanel.jsx';
 import { OverviewCards } from '../components/OverviewCards.jsx';
 import { SystemCards } from '../components/SystemCards.jsx';
 import { RealtimeCharts } from '../components/RealtimeCharts.jsx';
@@ -153,7 +154,12 @@ export function Dashboard() {
 
           <section className="dash-grid dash-grid-even">
             <RecentTable rows={farm.recent} />
-            <AlertsList alerts={farm.alerts} />
+            <div>
+              <AlertsList alerts={farm.alerts} />
+              {/* Đặt ngay dưới danh sách cảnh báo: thấy một cảnh báo đáng ngờ
+                  thì việc tiếp theo thường là tải số liệu ra xem kỹ. */}
+              <ExportPanel />
+            </div>
           </section>
 
           {/* Hai bảng chẩn đoán. Cả hai chỉ đọc dữ liệu đã nằm sẵn trong CSDL

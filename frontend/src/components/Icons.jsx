@@ -494,3 +494,13 @@ export const IconUnlock = (p) => (
     <path d="M12 14.2v2.6" />
   </Svg>
 );
+
+// Mũi tên xuống một khay — biểu tượng "tải về" quen thuộc, dùng cho nút xuất
+// báo cáo Excel.
+export const IconDownload = (p) => (
+  <Svg {...p}>
+    <path d="M12 3v11" />
+    <path d="m7.5 10 4.5 4.5L16.5 10" />
+    <path d="M4.5 16.5v2a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-2" />
+  </Svg>
+);

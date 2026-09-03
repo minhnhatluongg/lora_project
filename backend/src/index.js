@@ -15,6 +15,7 @@ import {
   createAlert,
 } from './services.js';
 import { telemetryRouter } from './routes/telemetry.js';
+import { exportRouter } from './routes/export.js';
 import { devicesRouter } from './routes/devices.js';
 import { commandsRouter } from './routes/commands.js';
 import { alertsRouter } from './routes/alerts.js';
@@ -65,6 +66,9 @@ app.use(
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/config', configRouter);
+// Gắn TRƯỚC telemetryRouter: router kia có route ':id' kiểu bắt-tất, nếu để
+// sau thì 'export' bị nuốt thành một id.
+app.use('/api/telemetry', exportRouter);
 app.use('/api/telemetry', telemetryRouter);
 app.use('/api/devices', devicesRouter);
 app.use('/api/commands', commandsRouter);

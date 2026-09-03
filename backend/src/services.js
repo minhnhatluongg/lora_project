@@ -54,6 +54,18 @@ export function getStatus() {
   const masterOnline =
     masterSeen > 0 &&
     now - masterSeen < config.masterTimeoutSeconds * 1000;
+
+  // slave_online là thứ MASTER kể lại, không phải thứ ta tự đo. Trước đây nó
+  // được đọc thẳng ra ngoài như một sự thật hiện tại — nên khi ESP32 tắt, cờ
+  // này ĐÓNG BĂNG ở giá trị cuối cùng và bảng vẫn khoe "Node cảm biến: ONLINE"
+  // bên cạnh dòng "Dữ liệu gần nhất: 5 giờ trước".
+  //
+  // Master im tiếng thì ta KHÔNG BIẾT node cảm biến ra sao — nó có thể vẫn chạy
+  // tốt và đang nói chuyện với một cái master đã chết. Trả null cho "không rõ"
+  // chứ không bịa ra ONLINE lẫn OFFLINE.
+  const slaveSeen = row.slave_seen_at ? new Date(row.slave_seen_at + 'Z').getTime() : 0;
+  const slaveFresh =
+    masterOnline && slaveSeen > 0 && now - slaveSeen < config.masterTimeoutSeconds * 1000;
   return {
     mode: row.mode,
     // Chế độ trên đã được PHẦN CỨNG xác nhận chưa, hay mới chỉ là điều web yêu
@@ -61,12 +73,16 @@ export function getStatus() {
     modeConfirmed: Boolean(row.mode_confirmed_at),
     modeConfirmedAt: row.mode_confirmed_at || null,
     masterOnline,
-    slaveOnline: !!row.slave_online,
+    // true / false / null = chưa rõ (xem ghi chú ở trên).
+    slaveOnline: slaveFresh ? !!row.slave_online : null,
     loraRssi: row.lora_rssi,
     masterSeenAt: row.master_seen_at,
     slaveSeenAt: row.slave_seen_at,
     // Result of the last Modbus RS485 transaction reported by the STM32 node.
     sensorStatus: row.sensor_status || null,
+    // Cùng lý do như slaveOnline: "Đọc tốt" của 5 giờ trước không phải là tin
+    // tức về hiện tại. Cờ này để giao diện nói rõ đó là số liệu cũ.
+    sensorStale: !slaveFresh,
     sensorErrorAt: row.sensor_error_at,
     // DỪNG KHẨN CẤP — see setEmergencyStop() for what it inhibits.
     eStop: !!row.e_stop,
